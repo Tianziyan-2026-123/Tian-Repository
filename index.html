@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的个人主页 - 国风版</title>
+    <style>
+        /* 全局设置 */
+        body {
+            margin: 0;
+            padding: 0;
+            /* 1. 模拟泛黄宣纸底色 */
+            background-color: #f4f0e6; 
+            /* 引入一种衬线字体或书法字体 */
+            font-family: "Kaiti", "STKaiti", "KaiTi", serif; 
+            color: #2c2c2c; /* 深墨色文字，不要用纯黑 */
+            overflow-x: hidden;
+        }
+
+        /* 背景层设计 */
+        .background-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            /* 这里模拟截图中的水墨晕染效果 */
+            background-image: 
+                /* 模拟远处的山峦/墨迹 (你可以替换为真实的水墨PNG图片) */
+                radial-gradient(circle at 80% 20%, rgba(0,0,0,0.1) 0%, transparent 40%),
+                radial-gradient(circle at 20% 80%, rgba(50,50,50,0.08) 0%, transparent 50%);
+            /* 叠加纸张纹理 (如果有图片资源更好) */
+            background-blend-mode: multiply;
+        }
+
+        /* 顶部导航栏 - 模仿古代匾额或卷轴头 */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 50px;
+            border-bottom: 2px solid #8b0000; /* 朱红色边框 */
+            background: rgba(244, 240, 230, 0.9); /* 半透明背景 */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin: 0;
+            letter-spacing: 5px;
+            text-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+        }
+
+        /* 印章效果 */
+        .seal {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #b22222; /* 印泥红 */
+            color: #b22222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            transform: rotate(-5deg); /* 微微倾斜更自然 */
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" opacity="0.1"><text x="10" y="50">纹理</text></svg>');
+        }
+
+        /* 主要内容区 */
+        .container {
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 40px;
+            /* 模拟线装书或画框的效果 */
+            border: 1px solid #dcdcdc;
+            background: rgba(255, 255, 255, 0.6);
+            box-shadow: 0 0 20px rgba(0,0,0,0.05);
+            position: relative;
+        }
+
+        /* 装饰性边角 (模仿中式窗棂) */
+        .container::before {
+            content: "";
+            position: absolute;
+            top: 10px; left: 10px; right: 10px; bottom: 10px;
+            border: 1px solid #8b0000; /* 内框红线 */
+            pointer-events: none;
+        }
+
+        /* 竖排文字效果 (可选，致敬古籍) */
+        .vertical-text {
+            writing-mode: vertical-rl;
+            text-orientation: upright;
+            height: 200px;
+            float: right;
+            margin-left: 20px;
+            font-size: 1.2rem;
+            line-height: 2em;
+            color: #555;
+        }
+
+        p {
+            line-height: 1.8;
+            font-size: 1.1rem;
+            text-align: justify;
+        }
+
+        /* 按钮样式 - 模仿令牌或书签 */
+        .btn {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 30px;
+            background-color: #2c2c2c;
+            color: #f4f0e6;
+            text-decoration: none;
+            border-radius: 2px;
+            transition: all 0.3s;
+            border: 1px solid #2c2c2c;
+        }
+
+        .btn:hover {
+            background-color: #b22222; /* 悬停变红 */
+            border-color: #b22222;
+            cursor: pointer;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- 背景层 -->
+    <div class="background-layer"></div>
+
+    <header>
+        <h1>列阵 · 个人志</h1>
+        <div class="seal">列阵<br>之印</div>
+    </header>
+
+    <div class="container">
+        <!-- 竖排装饰字 -->
+        <div class="vertical-text">
+            关外忽传收辽左<br>
+            初闻涕泪满衣裳
+        </div>
+
+        <h2>关于我</h2>
+        <p>
+            欢迎来到我的个人空间。这里记录了我的学习历程与生活感悟。
+            如同这水墨画卷一般，生活也是由浓淡干湿种种笔墨晕染而成。
+        </p >
+        <p>
+            我正在准备考研，目标是中国公安大学。在这里，我将整理我的复习资料与心得。
+            正如行军布阵，学习亦需步步为营。
+        </p >
+
+        <a href=" " class="btn">查看文章</a >
+    </div>
+
+</body>
+</html>
