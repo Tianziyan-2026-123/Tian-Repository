@@ -1,0 +1,4704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>中国精神 · 交互剧场</title>
+<style>
+/* =========================================================
+   基础重置与全局配色
+   ========================================================= */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: linear-gradient(160deg, #0d1117 0%, #120c11 45%, #1a0f14 100%);
+  color: #e8e2d8;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:root {
+  --gold: #C9A34E;
+  --red: #C0392B;
+  --paper: #e8e2d8;
+  --serif: "Noto Serif SC", "Source Han Serif SC", "STSong", serif;
+}
+
+/* =========================================================
+   全局氛围粒子层（最底层，不随页面重建）
+   ========================================================= */
+#ambient {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  display: block;
+}
+
+/* =========================================================
+   舞台与页面
+   ========================================================= */
+#stage {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.page {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .3s ease, visibility .3s ease;
+}
+
+.page.active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* 每页情绪色 */
+#page-xinan   { --accent: #C9A34E; --accent-2: #B4763C; --glow: rgba(201,163,78,.20); }
+#page-liangdan{ --accent: #E4A94A; --accent-2: #4C6FA8; --glow: rgba(228,169,74,.20); }
+#page-tuopin  { --accent: #C9A34E; --accent-2: #2F6B4F; --glow: rgba(47,107,79,.26); }
+
+/* 页面情绪色氛围底 */
+.page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(1000px 720px at 50% -6%, var(--glow), transparent 66%),
+    radial-gradient(760px 520px at 10% 104%, rgba(192,57,43,.10), transparent 70%),
+    radial-gradient(680px 480px at 92% 96%, rgba(201,163,78,.07), transparent 70%);
+}
+
+/* 页面特效画布（Canvas 2D，叠加在内容之上但不拦截指针） */
+.fx {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+  display: block;
+}
+
+/* =========================================================
+   页面内容排版
+   ========================================================= */
+.page-inner {
+  position: relative;
+  z-index: 2;
+  width: min(1100px, 94vw);
+  height: 100%;
+  max-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2vh, 20px);
+  padding: 4vh 0 6vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201,163,78,.35) transparent;
+}
+
+.page-inner::-webkit-scrollbar { width: 6px; }
+.page-inner::-webkit-scrollbar-thumb {
+  background: rgba(201,163,78,.35);
+  border-radius: 3px;
+}
+
+.page-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex: 0 0 auto;
+}
+
+.page-index {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  letter-spacing: .22em;
+  color: var(--accent);
+  opacity: .8;
+}
+
+.page-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: clamp(24px, 3.2vw, 42px);
+  letter-spacing: .16em;
+  color: #f2e9d6;
+  text-shadow: 0 0 30px rgba(201,163,78,.22);
+}
+
+/* 标题独立过渡名（只给激活页，保证唯一） */
+#page-xinan.active    .page-title { view-transition-name: title-xinan; }
+#page-liangdan.active .page-title { view-transition-name: title-liangdan; }
+#page-tuopin.active   .page-title { view-transition-name: title-tuopin; }
+
+/* =========================================================
+   3D 精神卡片
+   ========================================================= */
+.card {
+  width: clamp(250px, 25vw, 330px);
+  height: clamp(320px, 46vh, 440px);
+  perspective: 1200px;
+  cursor: pointer;
+  outline: none;
+  flex: 0 0 auto;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 16px;
+}
+
+.card:focus-visible {
+  box-shadow: 0 0 0 2px rgba(201,163,78,.75);
+}
+
+.card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform .6s cubic-bezier(.22, 1, .36, 1);
+}
+
+.card.is-flipped .card-inner {
+  transform: rotateY(180deg);
+}
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  border: 1px solid rgba(201,163,78,.30);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 16px 20px;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  background: linear-gradient(158deg, rgba(34,27,26,.97), rgba(15,12,16,.99));
+  box-shadow:
+    0 26px 60px rgba(0,0,0,.62),
+    0 2px 0 rgba(255,255,255,.04) inset,
+    0 0 40px rgba(201,163,78,.06) inset;
+}
+
+/* backdrop-filter 特性检测：支持时才用半透明毛玻璃，不支持则保留上面的不透明底 */
+@supports ((backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px))) {
+  .card-face {
+    background: linear-gradient(158deg, rgba(34,27,26,.72), rgba(15,12,16,.86));
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+}
+
+.card-back {
+  transform: rotateY(180deg);
+  justify-content: center;
+  gap: 14px;
+  border-color: rgba(201,163,78,.42);
+  background: linear-gradient(200deg, rgba(40,26,22,.97), rgba(14,11,16,.99));
+}
+
+@supports ((backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px))) {
+  .card-back {
+    background: linear-gradient(200deg, rgba(46,28,22,.78), rgba(14,11,16,.88));
+  }
+}
+
+.card-index {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: .2em;
+  color: var(--accent);
+  opacity: .75;
+}
+
+/* 「刚毅坚卓」粒子文字画布 */
+.word-canvas {
+  display: block;
+  width: 100%;
+  height: clamp(60px, 9vh, 92px);
+  margin-top: 6px;
+  flex: 0 0 auto;
+  cursor: crosshair;
+}
+
+.card-name {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: clamp(16px, 1.5vw, 20px);
+  letter-spacing: .22em;
+  color: var(--accent);
+  text-indent: .22em;
+}
+
+.card-art {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  opacity: .92;
+}
+
+.card-art svg {
+  width: 100%;
+  height: 100%;
+  max-height: 180px;
+  display: block;
+  filter: drop-shadow(0 0 12px rgba(201,163,78,.18));
+}
+
+/* 背面文案 */
+.back-block {
+  width: 100%;
+  text-align: center;
+}
+
+.back-label {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: .32em;
+  text-indent: .32em;
+  color: rgba(201,163,78,.72);
+}
+
+.back-core {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(17px, 1.7vw, 23px);
+  letter-spacing: .12em;
+  line-height: 1.65;
+  color: #f4ecdc;
+}
+
+.back-num {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(19px, 2vw, 26px);
+  letter-spacing: .06em;
+  color: var(--accent);
+  text-shadow: 0 0 22px rgba(201,163,78,.3);
+}
+
+.back-divider {
+  width: 46px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201,163,78,.7), transparent);
+}
+
+/* =========================================================
+   提示 / 按钮 / 宣言
+   ========================================================= */
+.hint {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: .12em;
+  color: rgba(232,226,216,.42);
+  flex: 0 0 auto;
+  text-align: center;
+}
+
+.act-btn {
+  flex: 0 0 auto;
+  font-family: var(--serif);
+  font-size: clamp(13px, 1.2vw, 15px);
+  letter-spacing: .24em;
+  text-indent: .24em;
+  color: var(--accent);
+  background: rgba(201,163,78,.06);
+  border: 1px solid rgba(201,163,78,.45);
+  border-radius: 999px;
+  padding: 10px 28px;
+  cursor: pointer;
+  transition: background .25s ease, border-color .25s ease, transform .18s ease, color .25s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.act-btn:hover {
+  background: rgba(201,163,78,.16);
+  border-color: var(--accent);
+  color: #f6eeda;
+}
+
+.act-btn:active {
+  transform: scale(.96);
+}
+
+.manifesto {
+  flex: 0 0 auto;
+  min-height: 1.8em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--serif);
+  font-size: clamp(15px, 1.6vw, 21px);
+  letter-spacing: .2em;
+  text-indent: .2em;
+  color: #e6d9bd;
+  text-align: center;
+}
+
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 6px;
+  background: var(--accent);
+  animation: caretBlink 1s step-end infinite;
+  flex: 0 0 auto;
+}
+
+@keyframes caretBlink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
+/* =========================================================
+   新增：卡片两边的照片墙（每页 6 张，左右各 3 张）
+   ========================================================= */
+.photo-wall {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2vw, 26px);
+  width: 100%;
+  flex: 0 0 auto;
+  margin: 4px 0;
+}
+
+.photo-side {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 1.8vh, 16px);
+  flex: 0 0 auto;
+}
+
+.photo-thumb {
+  width: clamp(52px, 6.5vw, 82px);
+  height: clamp(52px, 6.5vw, 82px);
+  border-radius: 10px;
+  border: 1px solid rgba(201,163,78,.38);
+  overflow: hidden;
+  cursor: pointer;
+  background: rgba(20,16,20,.6);
+  transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.photo-thumb:hover {
+  transform: scale(1.08);
+  border-color: var(--accent);
+  box-shadow: 0 0 18px rgba(201,163,78,.35);
+}
+
+.photo-thumb:active {
+  transform: scale(.96);
+}
+
+.photo-thumb svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* 照片放大遮罩层 */
+.photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(6,4,8,.86);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .3s ease, visibility .3s ease;
+}
+
+.photo-lightbox.on {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.photo-lightbox-inner {
+  position: relative;
+  width: min(74vw, 540px);
+  max-height: 80vh;
+  border-radius: 14px;
+  border: 1px solid rgba(201,163,78,.55);
+  background: linear-gradient(158deg, rgba(30,24,24,.98), rgba(12,10,14,.99));
+  padding: 18px;
+  box-shadow: 0 30px 90px rgba(0,0,0,.8), 0 0 60px rgba(201,163,78,.12);
+  transform: scale(.92);
+  transition: transform .3s cubic-bezier(.22,1,.36,1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  overflow: auto;
+}
+
+.photo-lightbox.on .photo-lightbox-inner {
+  transform: scale(1);
+}
+
+.photo-lightbox-media {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(201,163,78,.06);
+  border: 1px solid rgba(201,163,78,.22);
+}
+
+.photo-lightbox-media svg,
+.photo-lightbox-media img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.photo-lightbox-caption {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(14px, 1.4vw, 17px);
+  letter-spacing: .16em;
+  color: #efe3c8;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.photo-lightbox-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(201,163,78,.5);
+  background: rgba(20,16,20,.8);
+  color: var(--gold);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  transition: background .2s ease, border-color .2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.photo-lightbox-close:hover {
+  background: rgba(201,163,78,.2);
+  border-color: var(--gold);
+}
+
+/* 每页顶部赞颂文字条 */
+.tribute-bar {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 920px;
+  margin: 2px auto 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--accent);
+  background: linear-gradient(90deg, rgba(201,163,78,.08), transparent 80%);
+  border-radius: 0 8px 8px 0;
+  font-family: var(--serif);
+  font-size: clamp(11px, 1.05vw, 13px);
+  line-height: 1.7;
+  letter-spacing: .05em;
+  color: rgba(232,226,216,.8);
+  text-align: left;
+  max-height: 7.5em;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201,163,78,.3) transparent;
+}
+
+.tribute-bar::-webkit-scrollbar { width: 4px; }
+.tribute-bar::-webkit-scrollbar-thumb {
+  background: rgba(201,163,78,.3);
+  border-radius: 2px;
+}
+
+/* =========================================================
+   新增：屏幕左右两侧的大相片位（每页各 1 大 + 4 小，共 5 张，左右对称）
+   ========================================================= */
+.side-gallery {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 1.2vh, 12px);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .3s ease, visibility .3s ease;
+}
+
+.page.active .side-gallery {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* 左侧位置：卡片左侧与屏幕左边缘之间 */
+.side-gallery.side-gallery-left {
+  left: clamp(6px, 1.5vw, 22px);
+}
+
+/* 右侧位置：卡片右侧与屏幕右边缘之间 */
+.side-gallery.side-gallery-right {
+  right: clamp(6px, 1.5vw, 22px);
+}
+
+.side-photo {
+  position: relative;
+  width: clamp(60px, 7vw, 96px);
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  border: 1px solid rgba(201,163,78,.40);
+  overflow: hidden;
+  cursor: pointer;
+  background: rgba(20,16,20,.55);
+  transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.side-photo:hover {
+  transform: scale(1.06);
+  border-color: var(--accent);
+  box-shadow: 0 0 22px rgba(201,163,78,.40);
+  z-index: 2;
+}
+
+.side-photo:active {
+  transform: scale(.96);
+}
+
+/* 大图：宽度更大，形成“上大下四小”的布局 */
+.side-photo.side-photo-large {
+  width: clamp(96px, 11.5vw, 158px);
+  aspect-ratio: 4 / 3;
+}
+
+.side-photo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+/* 小图占位：当没有填写图片路径时显示一个简约的相框图标 */
+.side-photo .placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(201,163,78,.55);
+}
+
+.side-photo .placeholder svg {
+  width: 58%;
+  height: 58%;
+  display: block;
+}
+
+/* 小相册（原有卡片两侧 3+3）不变，这里只补充侧边画廊的响应式 */
+@media (max-width: 1200px) {
+  .side-photo { width: clamp(52px, 6.5vw, 82px); }
+  .side-photo.side-photo-large { width: clamp(84px, 10vw, 132px); }
+}
+
+@media (max-width: 860px) {
+  .side-gallery { display: none; }
+}
+
+/* =========================================================
+   导航按钮 / 分页点 / 静音开关
+   ========================================================= */
+.nav-btn {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 1px solid rgba(201,163,78,.38);
+  background: rgba(20,16,20,.55);
+  color: var(--gold);
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 60;
+  padding: 0;
+  transition: background .25s ease, border-color .25s ease, transform .18s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.nav-btn:hover {
+  background: rgba(201,163,78,.16);
+  border-color: var(--gold);
+}
+
+.nav-btn:active {
+  transform: translateY(-50%) scale(.92);
+}
+
+.nav-btn.nav-prev { left: clamp(8px, 2.4vw, 40px); }
+.nav-btn.nav-next { right: clamp(8px, 2.4vw, 40px); }
+
+.pager {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 11px;
+  z-index: 60;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(201,163,78,.28);
+  cursor: pointer;
+  transition: background .3s ease, transform .3s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dot.on {
+  background: var(--gold);
+  transform: scale(1.45);
+  box-shadow: 0 0 12px rgba(201,163,78,.6);
+}
+
+.sound-toggle {
+  position: fixed;
+  top: 16px;
+  right: 18px;
+  z-index: 80;
+  font-size: 12px;
+  letter-spacing: .12em;
+  color: rgba(232,226,216,.78);
+  background: rgba(20,16,20,.55);
+  border: 1px solid rgba(201,163,78,.32);
+  border-radius: 999px;
+  padding: 7px 15px;
+  cursor: pointer;
+  transition: background .25s ease, border-color .25s ease, color .25s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  font-family: inherit;
+}
+
+.sound-toggle:hover {
+  background: rgba(201,163,78,.16);
+  border-color: var(--gold);
+  color: #f4ecdc;
+}
+
+/* =========================================================
+   View Transitions API 转场动画（不支持时自动退化为 opacity 过渡）
+   ========================================================= */
+::view-transition-old(root) {
+  animation: vtOut .42s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+::view-transition-new(root) {
+  animation: vtIn .42s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes vtOut {
+  to { opacity: 0; transform: translateX(-34px); }
+}
+
+@keyframes vtIn {
+  from { opacity: 0; transform: translateX(34px); }
+}
+
+::view-transition-group(title-xinan),
+::view-transition-group(title-liangdan),
+::view-transition-group(title-tuopin) {
+  animation-duration: .46s;
+  animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+}
+
+/* =========================================================
+   自适应
+   ========================================================= */
+@media (max-width: 760px) {
+  .nav-btn { width: 42px; height: 42px; font-size: 18px; }
+  .card { width: 78vw; max-width: 320px; }
+  .hint { font-size: 11px; }
+  .photo-thumb { width: 44px; height: 44px; }
+  .photo-wall { gap: 8px; }
+  .tribute-bar { font-size: 10px; max-height: 6em; }
+}
+
+/* 尊重减少动态偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .card-inner { transition-duration: .01ms; }
+  .caret { animation: none; opacity: 1; }
+  .page { transition: opacity .3s ease, visibility .3s ease; }
+}
+/* =========================================================
+   [BOOT] DEEPSEEK HARNESS OS —— 全屏多阶段启动动画
+   说明：全部使用 boot- / #bootScreen 前缀，仅新增不覆盖原有样式
+   ========================================================= */
+#bootScreen{
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#000;
+  color:#e8eef4;
+  font-family:"SFMono-Regular","SF Mono",ui-monospace,Menlo,Consolas,"Courier New","PingFang SC","Microsoft YaHei",monospace;
+  font-size:14px;
+  line-height:1.5;
+  overflow:hidden;
+  cursor:pointer;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  text-rendering:optimizeLegibility;
+}
+#bootScreen.is-off{ display:none !important; }
+
+/* ---------- 背景：网格 / 扫描线 / 光带 / 暗角 ---------- */
+.boot-grid{
+  position:absolute; inset:-40%; z-index:1; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(120,190,240,.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,190,240,.055) 1px, transparent 1px);
+  background-size:58px 58px;
+  -webkit-mask-image:radial-gradient(58% 52% at 50% 50%, #000 0%, rgba(0,0,0,.5) 60%, transparent 100%);
+  mask-image:radial-gradient(58% 52% at 50% 50%, #000 0%, rgba(0,0,0,.5) 60%, transparent 100%);
+  animation:bootGridMove 28s linear infinite;
+}
+@keyframes bootGridMove{
+  from{ background-position:0 0, 0 0; }
+  to  { background-position:58px 58px, 58px 58px; }
+}
+
+.boot-scan{
+  position:absolute; inset:0; z-index:7; pointer-events:none;
+  background:repeating-linear-gradient(to bottom,
+    rgba(170,215,255,.05) 0px, rgba(170,215,255,.05) 1px,
+    transparent 1px, transparent 3px);
+}
+.boot-sweep{
+  position:absolute; left:0; right:0; height:30vh; top:-30vh; z-index:7; pointer-events:none;
+  background:linear-gradient(to bottom, transparent, rgba(120,205,255,.06) 55%, transparent);
+  animation:bootSweep 7.5s linear infinite;
+}
+@keyframes bootSweep{ from{ top:-30vh; } to{ top:110vh; } }
+
+.boot-flicker{
+  position:absolute; inset:0; z-index:8; pointer-events:none;
+  background:rgba(180,220,255,.03);
+  animation:bootFlicker 6s steps(1) infinite;
+}
+@keyframes bootFlicker{
+  0%, 6%, 8%, 12%, 52%, 54%, 100%{ opacity:.2; }
+  7%, 11%, 53%{ opacity:.9; }
+}
+
+.boot-vignette{
+  position:absolute; inset:0; z-index:8; pointer-events:none;
+  background:radial-gradient(115% 85% at 50% 50%,
+    transparent 34%, rgba(0,0,0,.5) 74%, #000 100%);
+}
+
+/* ---------- 边框与四角 ---------- */
+.boot-frame{
+  position:absolute;
+  inset:clamp(10px, 1.7vw, 24px);
+  z-index:6;
+  pointer-events:none;
+  border:1px solid rgba(150,200,225,.10);
+}
+.boot-corner{
+  position:absolute; width:16px; height:16px;
+  border:1px solid rgba(175,225,250,.6);
+}
+.boot-corner.tl{ top:-1px; left:-1px; border-right:0; border-bottom:0; }
+.boot-corner.tr{ top:-1px; right:-1px; border-left:0; border-bottom:0; }
+.boot-corner.bl{ bottom:-1px; left:-1px; border-right:0; border-top:0; }
+.boot-corner.br{ bottom:-1px; right:-1px; border-left:0; border-top:0; }
+
+/* ---------- HUD 文字 ---------- */
+.boot-hud{
+  position:absolute; z-index:9; pointer-events:none;
+  font-size:clamp(8px, .74vw, 10px);
+  letter-spacing:.2em;
+  line-height:1.9;
+  color:rgba(196,220,238,.48);
+  animation:bootHudIn .9s ease .15s both;
+}
+@keyframes bootHudIn{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
+
+.boot-hud-tl{ top:clamp(18px, 2.8vh, 34px); left:clamp(20px, 2.4vw, 40px); }
+.boot-hud-tr{ top:clamp(18px, 2.8vh, 34px); right:clamp(20px, 2.4vw, 40px); text-align:right; }
+.boot-hud-bl{ bottom:clamp(18px, 2.8vh, 34px); left:clamp(20px, 2.4vw, 40px); }
+.boot-hud-br{ bottom:clamp(18px, 2.8vh, 34px); right:clamp(20px, 2.4vw, 40px); text-align:right; }
+
+.boot-brand{ display:block; color:#fff; }
+.boot-brand i{ display:block; font-style:normal; }
+.boot-brand .l1,
+.boot-brand .l3{
+  font-size:clamp(11px, 1.1vw, 15px);
+  font-weight:700;
+  letter-spacing:.34em;
+  text-shadow:0 0 18px rgba(180,225,255,.35);
+}
+.boot-brand .l2{
+  font-size:.86em;
+  letter-spacing:.3em;
+  color:rgba(196,220,238,.42);
+  margin:.35em 0 .2em;
+}
+.boot-meta{
+  display:block;
+  margin-top:1.05em;
+  font-size:.94em;
+  color:rgba(176,204,224,.34);
+  letter-spacing:.18em;
+}
+.boot-meta b{ font-weight:600; color:#79e8bb; }
+.boot-meta .warn{ color:#ff6b6b; }
+.boot-tick{
+  display:inline-block; width:6px; height:6px; margin-right:8px;
+  background:#ff4d5e; vertical-align:middle;
+  box-shadow:0 0 10px rgba(255,77,94,.85);
+}
+.boot-skip{
+  display:inline-block; margin-top:1em; padding:4px 10px;
+  border:1px solid rgba(175,225,250,.22);
+  color:rgba(196,220,238,.5);
+  letter-spacing:.24em;
+  animation:bootSkipBlink 2.6s ease-in-out infinite;
+}
+@keyframes bootSkipBlink{ 0%,100%{ opacity:.45; } 50%{ opacity:1; } }
+
+/* ---------- 舞台与场景 ---------- */
+.boot-stage{
+  position:relative;
+  z-index:9;
+  width:min(1180px, 92vw);
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.boot-scene{
+  position:absolute;
+  inset:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:clamp(8px, 1.5vh, 16px);
+  padding:0 5vw;
+  text-align:center;
+  opacity:0;
+  pointer-events:none;
+  will-change:opacity, transform;
+}
+
+/* ---------- PHASE 1 · Logo ---------- */
+.boot-logo-mark{
+  width:clamp(96px, 15vh, 148px);
+  height:auto;
+  display:block;
+  color:#fff;
+  transform:scale(.82);
+  filter:drop-shadow(0 0 26px rgba(190,230,255,.35));
+}
+.boot-logo-word{
+  margin:clamp(14px,2.4vh,26px) 0 0;
+  font-size:clamp(17px, 2.1vw, 26px);
+  font-weight:600;
+  letter-spacing:.92em;
+  text-indent:.92em;
+  color:#fff;
+  opacity:0;
+  text-shadow:0 0 26px rgba(200,235,255,.45);
+  white-space:nowrap;
+}
+.boot-logo-sub{
+  margin:0;
+  font-size:clamp(8px, .92vw, 11px);
+  letter-spacing:.56em;
+  text-indent:.56em;
+  color:rgba(200,226,244,.55);
+  opacity:0;
+  white-space:nowrap;
+}
+.boot-logo-rule{
+  width:min(300px, 54vw);
+  height:1px;
+  margin-top:clamp(10px,1.8vh,18px);
+  background:linear-gradient(90deg, transparent, rgba(190,230,255,.75), transparent);
+  transform:scaleX(0);
+}
+
+/* ---------- PHASE 2 · 打字机 ---------- */
+.boot-headline{
+  margin:0;
+  max-width:min(920px, 86vw);
+  font-size:clamp(12px, 1.55vw, 22px);
+  font-weight:500;
+  line-height:2.1;
+  letter-spacing:.42em;
+  color:#fff;
+  text-shadow:0 0 22px rgba(170,225,255,.5), 0 0 60px rgba(120,190,255,.18);
+  min-height:2.1em;
+}
+.boot-caret{
+  display:inline-block;
+  width:.55em;
+  height:1.02em;
+  margin-left:.12em;
+  vertical-align:-.14em;
+  background:#8ef3ff;
+  box-shadow:0 0 14px rgba(142,243,255,.9);
+  animation:bootCaret .78s steps(1) infinite;
+}
+@keyframes bootCaret{ 0%,49%{ opacity:1; } 50%,100%{ opacity:0; } }
+
+.boot-logs{
+  width:min(460px, 80vw);
+  margin-top:clamp(14px,2.6vh,26px);
+  display:flex;
+  flex-direction:column;
+  gap:clamp(5px,.9vh,9px);
+  font-size:clamp(8px, .78vw, 11px);
+  letter-spacing:.18em;
+  color:rgba(186,214,236,.42);
+  text-align:left;
+}
+.boot-log{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  opacity:0;
+  white-space:nowrap;
+  overflow:hidden;
+}
+.boot-log .k{ color:rgba(150,184,210,.4); flex:0 0 auto; }
+.boot-log .d{
+  flex:1 1 auto;
+  height:1px;
+  background:repeating-linear-gradient(90deg, rgba(150,190,220,.22) 0 2px, transparent 2px 5px);
+  transform:translateY(-.2em);
+}
+.boot-log .v{ flex:0 0 auto; color:#8ef3ff; }
+.boot-log .ok{ flex:0 0 auto; color:#79e8bb; }
+
+/* ---------- PHASE 3 · 权限请求 ---------- */
+.boot-perm-wrap{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:clamp(10px,1.8vh,18px);
+}
+.boot-perm{
+  position:relative;
+  padding:clamp(16px,2.6vh,28px) clamp(22px,3.4vw,48px);
+  border:1px solid rgba(150,210,245,.45);
+  background:linear-gradient(180deg, rgba(90,170,235,.06), rgba(0,0,0,.35));
+  box-shadow:0 0 70px rgba(70,150,220,.12), inset 0 0 50px rgba(70,150,220,.06);
+  transform:scale(.94);
+  animation:bootPermPulse 2.4s ease-in-out infinite;
+}
+@keyframes bootPermPulse{
+  0%, 100%{ border-color:rgba(150,210,245,.42); box-shadow:0 0 50px rgba(70,150,220,.12), inset 0 0 40px rgba(70,150,220,.05); }
+  50%     { border-color:rgba(140,240,255,.95); box-shadow:0 0 90px rgba(90,190,255,.3), inset 0 0 60px rgba(90,190,255,.1); }
+}
+.boot-perm::before,
+.boot-perm::after{
+  content:"";
+  position:absolute; width:7px; height:7px;
+  background:#8ef3ff;
+  box-shadow:0 0 12px rgba(142,243,255,.9);
+}
+.boot-perm::before{ top:-4px; left:-4px; }
+.boot-perm::after{ bottom:-4px; right:-4px; }
+
+.boot-perm-title{
+  margin:0;
+  font-size:clamp(15px, 2vw, 25px);
+  font-weight:600;
+  letter-spacing:.5em;
+  text-indent:.5em;
+  color:#fff;
+  text-shadow:0 0 26px rgba(170,225,255,.55);
+  white-space:nowrap;
+}
+.boot-perm-en{
+  margin:clamp(8px,1.4vh,12px) 0 0;
+  font-size:clamp(8px, .82vw, 11px);
+  letter-spacing:.44em;
+  text-indent:.44em;
+  color:rgba(190,220,240,.55);
+  white-space:nowrap;
+}
+.boot-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  margin-top:clamp(14px,2.2vh,20px);
+  padding:7px 20px;
+  border:1px solid rgba(190,225,250,.38);
+  background:rgba(190,225,250,.07);
+  font-size:clamp(8px, .9vw, 12px);
+  letter-spacing:.22em;
+  color:#e6f5ff;
+  animation:bootChipBlink 1.1s steps(1) infinite;
+}
+.boot-chip b{ color:#8ef3ff; font-weight:600; }
+@keyframes bootChipBlink{ 0%,100%{ opacity:1; } 50%{ opacity:.55; } }
+
+.boot-perm-note{
+  margin:0;
+  font-size:clamp(7px, .72vw, 10px);
+  letter-spacing:.22em;
+  color:rgba(160,195,220,.35);
+}
+
+/* ---------- PHASE 4 · 雷达进度 ---------- */
+.boot-radar{
+  position:relative;
+  width:clamp(196px, 32vh, 300px);
+  aspect-ratio:1 / 1;
+  display:grid;
+  place-items:center;
+}
+.boot-radar .ring{
+  position:absolute;
+  border:1px solid rgba(160,205,235,.14);
+  border-radius:50%;
+}
+.boot-radar .ring.r1{ inset:0; }
+.boot-radar .ring.r2{ inset:12.5%; }
+.boot-radar .ring.r3{ inset:25%; }
+.boot-radar .ring.r4{ inset:37.5%; border-color:rgba(160,205,235,.09); }
+.boot-radar .cross-h,
+.boot-radar .cross-v{
+  position:absolute;
+  background:rgba(160,205,235,.1);
+}
+.boot-radar .cross-h{ left:0; right:0; top:50%; height:1px; }
+.boot-radar .cross-v{ top:0; bottom:0; left:50%; width:1px; }
+.boot-radar .spin{
+  position:absolute; inset:0; border-radius:50%;
+  background:conic-gradient(from 0deg,
+    rgba(126,240,255,.3) 0deg, rgba(126,240,255,.12) 34deg,
+    transparent 70deg, transparent 360deg);
+  -webkit-mask:radial-gradient(circle, transparent 26%, #000 27%);
+  mask:radial-gradient(circle, transparent 26%, #000 27%);
+  animation:bootSpin 2.1s linear infinite;
+}
+@keyframes bootSpin{ to{ transform:rotate(360deg); } }
+
+.boot-arc{ position:absolute; inset:0; width:100%; height:100%; transform:rotate(-90deg); }
+.boot-arc-bg{ fill:none; stroke:rgba(150,200,230,.12); stroke-width:1; }
+.boot-arc-fg{
+  fill:none;
+  stroke:#9cecff;
+  stroke-width:2;
+  stroke-linecap:round;
+  filter:drop-shadow(0 0 7px rgba(140,235,255,.85));
+}
+
+.boot-radar-core{
+  position:relative;
+  z-index:2;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+}
+.boot-pct{
+  font-size:clamp(20px, 3.2vh, 30px);
+  letter-spacing:.06em;
+  color:#fff;
+  text-shadow:0 0 24px rgba(150,230,255,.6);
+}
+.boot-pct small{
+  font-size:.44em;
+  letter-spacing:.1em;
+  color:rgba(180,215,238,.6);
+  margin-left:2px;
+}
+.boot-radar-label{
+  font-size:clamp(7px, .72vw, 10px);
+  letter-spacing:.3em;
+  color:rgba(170,205,230,.5);
+  white-space:nowrap;
+}
+
+/* ---------- PHASE 5 · 就绪 ---------- */
+.boot-ready-title{
+  margin:0;
+  font-size:clamp(24px, 4.6vw, 52px);
+  font-weight:700;
+  letter-spacing:.62em;
+  text-indent:.62em;
+  color:#fff;
+  text-shadow:0 0 40px rgba(160,230,255,.5);
+  white-space:nowrap;
+}
+.boot-ready-sub{
+  margin:clamp(10px,2vh,18px) 0 0;
+  font-size:clamp(10px, 1.05vw, 14px);
+  letter-spacing:.66em;
+  text-indent:.66em;
+  color:rgba(190,222,242,.62);
+  opacity:0;
+  white-space:nowrap;
+}
+
+/* 故障重影文字 */
+.boot-glitch{ position:relative; display:inline-block; }
+.boot-glitch::before,
+.boot-glitch::after{
+  content:attr(data-text);
+  position:absolute; left:0; top:0;
+  width:100%;
+  pointer-events:none;
+}
+.boot-glitch::before{ color:#ff4d6d; clip-path:inset(0 0 58% 0); animation:bootG1 5.2s steps(1) infinite; }
+.boot-glitch::after{ color:#5df2ff; clip-path:inset(54% 0 0 0); animation:bootG2 4.4s steps(1) infinite; }
+@keyframes bootG1{
+  0%, 74%, 80%, 100%{ transform:translate(0,0); opacity:0; }
+  75%{ transform:translate(-3px,-1px); opacity:.85; }
+  77%{ transform:translate(2px,1px); opacity:.6; }
+}
+@keyframes bootG2{
+  0%, 68%, 76%, 100%{ transform:translate(0,0); opacity:0; }
+  69%{ transform:translate(3px,1px); opacity:.85; }
+  72%{ transform:translate(-2px,-1px); opacity:.55; }
+}
+
+/* ---------- 遮罩层（黑屏 / 白闪） ---------- */
+.boot-blackout{
+  position:absolute; inset:0; z-index:11; background:#000;
+  opacity:0; pointer-events:none;
+}
+.boot-flash{
+  position:absolute; inset:0; z-index:12; background:#fff;
+  opacity:0; pointer-events:none;
+}
+
+/* ---------- 故障爆发 ---------- */
+#bootScreen.is-glitch .boot-stage{ animation:bootShake .34s steps(2) 1; }
+@keyframes bootShake{
+  0%   { transform:translate3d(0,0,0); }
+  25%  { transform:translate3d(-7px,3px,0) skewX(-1.4deg); }
+  50%  { transform:translate3d(6px,-4px,0) skewX(1.1deg); }
+  75%  { transform:translate3d(-3px,2px,0) skewX(-.6deg); }
+  100% { transform:translate3d(0,0,0); }
+}
+#bootScreen.is-glitch .boot-logo-mark{ filter:drop-shadow(0 0 26px rgba(190,230,255,.35)) invert(1); }
+
+/* Logo 呼吸 */
+#bootScreen.is-pulse .boot-logo-mark{ animation:bootLogoPulse 2.4s ease-in-out infinite; }
+@keyframes bootLogoPulse{
+  0%, 100%{ transform:scale(1); }
+  50%     { transform:scale(1.035); }
+}
+
+/* ---------- 小屏适配 ---------- */
+@media (max-width: 640px){
+  .boot-headline{ letter-spacing:.3em; font-size:clamp(10px,3.4vw,14px); line-height:2.2; }
+  .boot-logo-word{ letter-spacing:.62em; text-indent:.62em; }
+  .boot-logo-sub{ letter-spacing:.34em; text-indent:.34em; }
+  .boot-perm{ padding:14px 16px; }
+  .boot-perm-title{ letter-spacing:.3em; text-indent:.3em; font-size:14px; }
+  .boot-perm-en{ letter-spacing:.24em; text-indent:.24em; font-size:7.5px; }
+  .boot-ready-title{ letter-spacing:.34em; text-indent:.34em; font-size:clamp(15px,4.4vw,24px); }
+  .boot-ready-sub{ letter-spacing:.4em; text-indent:.4em; }
+  .boot-hud{ font-size:8px; letter-spacing:.14em; }
+  .boot-hud-tl{ display:none; }
+}
+
+/* 尊重系统「减少动态效果」设置 */
+@media (prefers-reduced-motion: reduce){
+  .boot-flicker, .boot-sweep, .boot-grid, .boot-radar .spin,
+  .boot-glitch::before, .boot-glitch::after{ animation:none !important; }
+  .boot-glitch::before, .boot-glitch::after{ opacity:0 !important; }
+  .boot-perm, .boot-chip{ animation:none !important; }
+  #bootScreen.is-glitch .boot-stage{ animation:none !important; }
+}
+
+/* =========================================================
+   [BOOT-2] 身份核验章节（阶段 A–D）—— async/await 精确时序版
+   ========================================================= */
+
+/* ---------- 深色环境底 ---------- */
+.boot-ambient{
+  position:absolute;
+  inset:0;
+  z-index:0;
+  opacity:0;
+  pointer-events:none;
+  background:
+    radial-gradient(78% 66% at 27% 40%, rgba(40,64,86,.60), transparent 72%),
+    radial-gradient(56% 54% at 81% 30%, rgba(92,66,46,.40), transparent 74%),
+    radial-gradient(72% 62% at 50% 108%, rgba(10,16,24,.86), transparent 76%),
+    linear-gradient(180deg, #05080c 0%, #04060a 100%);
+}
+
+/* ---------- 左栏参数 ---------- */
+.boot-side{
+  position:absolute;
+  left:clamp(20px, 2.4vw, 40px);
+  top:clamp(112px, 15.5vh, 168px);
+  z-index:9;
+  width:clamp(146px, 15vw, 226px);
+  opacity:0;
+  pointer-events:none;
+  font-size:clamp(7px, .68vw, 9.5px);
+  letter-spacing:.18em;
+  line-height:1.95;
+  color:rgba(190,214,232,.42);
+}
+.boot-side .rev-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:rgba(205,226,242,.55);
+}
+.boot-side .rev-row .dots{
+  flex:0 0 auto;
+  letter-spacing:.24em;
+  color:rgba(150,180,205,.30);
+}
+.boot-side .rev-row .minibar{
+  position:relative;
+  flex:1 1 auto;
+  height:2px;
+  background:rgba(150,185,210,.16);
+}
+.boot-side .rev-row .minibar i{
+  position:absolute; top:0; bottom:0; left:0; width:42%;
+  background:rgba(210,235,250,.6);
+}
+.boot-side .rev-line{
+  position:relative;
+  height:1px;
+  margin:9px 0 12px;
+  background:linear-gradient(90deg, rgba(150,185,210,.28), rgba(150,185,210,.06));
+}
+.boot-side .rev-line i{
+  position:absolute; top:-1px; height:3px; left:22%; width:26%;
+  background:#ff3b30;
+  box-shadow:0 0 10px rgba(255,59,48,.85);
+}
+.boot-side .kv{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  color:rgba(170,198,220,.34);
+}
+.boot-side .kv b{
+  font-weight:400;
+  color:rgba(214,236,250,.55);
+}
+.boot-side .kv b.warn{ color:#ff5b52; }
+
+/* ---------- 右栏自检面板 ---------- */
+.boot-check{
+  position:absolute;
+  right:clamp(20px, 2.4vw, 40px);
+  top:47%;
+  z-index:9;
+  width:clamp(140px, 14vw, 210px);
+  opacity:0;
+  pointer-events:none;
+  font-size:clamp(6.5px, .62vw, 9px);
+  letter-spacing:.16em;
+  color:rgba(190,214,232,.44);
+}
+.boot-check .hd{
+  display:flex;
+  justify-content:space-between;
+  padding-bottom:4px;
+  color:rgba(214,236,250,.6);
+}
+.boot-check .hd b{ color:#ff5b52; font-weight:400; }
+.boot-check .hdb{
+  position:relative;
+  height:2px;
+  margin-bottom:8px;
+  background:rgba(150,185,210,.14);
+}
+.boot-check .hdb i{
+  position:absolute; top:0; bottom:0; left:0; width:46%;
+  background:#ff3b30;
+  box-shadow:0 0 8px rgba(255,59,48,.8);
+}
+.boot-check .row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:3px 0;
+  border-bottom:1px solid rgba(150,185,210,.07);
+}
+.boot-check .row .meter{
+  position:relative;
+  width:52%;
+  height:2px;
+  background:repeating-linear-gradient(90deg, rgba(190,218,240,.22) 0 1px, transparent 1px 6px);
+}
+.boot-check .row .meter i{
+  position:absolute; top:0; bottom:0; left:0;
+  background:rgba(214,238,252,.75);
+}
+.boot-check .row.warn{ color:#ff5b52; }
+.boot-check .row.warn .meter i{ background:#ff3b30; box-shadow:0 0 8px rgba(255,59,48,.8); }
+
+/* ---------- 右侧雷达（接收访问需求） ---------- */
+.boot-r2{
+  position:absolute;
+  right:clamp(24px, 5vw, 88px);
+  top:50%;
+  transform:translateY(-50%);
+  z-index:9;
+  width:clamp(150px, 17vw, 216px);
+  display:none;
+  flex-direction:column;
+  align-items:center;
+  gap:14px;
+  opacity:0;
+  pointer-events:none;
+}
+.boot-r2 .dial{
+  position:relative;
+  width:100%;
+  aspect-ratio:1 / 1;
+  border-radius:50%;
+  border:1px solid rgba(180,220,245,.30);
+}
+.boot-r2 .dial::before{
+  content:""; position:absolute; inset:13%;
+  border:1px solid rgba(180,220,245,.18); border-radius:50%;
+}
+.boot-r2 .dial::after{
+  content:""; position:absolute; inset:27%;
+  border:1px solid rgba(180,220,245,.11); border-radius:50%;
+}
+.boot-r2 .sweep{
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  background:conic-gradient(from 0deg,
+    rgba(126,240,255,.45) 0deg, rgba(126,240,255,.16) 30deg,
+    transparent 64deg, transparent 360deg);
+  -webkit-mask:radial-gradient(circle, transparent 17%, #000 18%);
+  mask:radial-gradient(circle, transparent 17%, #000 18%);
+  animation:bootSpin 1.9s linear infinite;
+}
+.boot-r2 .core{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:2px;
+  color:#fff;
+  font-size:clamp(15px, 1.8vw, 23px);
+  letter-spacing:.04em;
+  text-shadow:0 0 22px rgba(150,230,255,.65);
+}
+.boot-r2 .core small{
+  font-size:.44em;
+  color:rgba(180,215,238,.6);
+}
+.boot-r2 .cap{
+  font-size:clamp(6px, .6vw, 8.5px);
+  letter-spacing:.28em;
+  color:rgba(170,205,230,.45);
+  white-space:nowrap;
+}
+.boot-r2 .bar{
+  position:relative;
+  width:100%;
+  height:2px;
+  background:rgba(180,220,245,.14);
+  overflow:hidden;
+}
+.boot-r2 .bar i{
+  position:absolute;
+  inset:0;
+  transform:scaleX(0);
+  transform-origin:left center;
+  background:linear-gradient(90deg, #8ef3ff, #ffffff);
+  box-shadow:0 0 12px rgba(140,235,255,.9);
+}
+
+/* ---------- 右侧代码流（开始读取权限） ---------- */
+.boot-code{
+  position:absolute;
+  right:clamp(24px, 5vw, 88px);
+  top:50%;
+  transform:translateY(-50%);
+  z-index:9;
+  width:clamp(196px, 23vw, 330px);
+  display:none;
+  opacity:0;
+  pointer-events:none;
+  font-size:clamp(6.5px, .6vw, 9px);
+  line-height:1.9;
+  letter-spacing:.05em;
+  color:rgba(172,210,238,.44);
+  text-align:right;
+  -webkit-mask-image:linear-gradient(180deg, transparent, #000 14%, #000 86%, transparent);
+  mask-image:linear-gradient(180deg, transparent, #000 14%, #000 86%, transparent);
+}
+.boot-code span{
+  display:block;
+  white-space:pre;
+  overflow:hidden;
+  text-overflow:clip;
+}
+.boot-code span:nth-child(3n+2){ color:rgba(126,240,255,.5); }
+
+/* ---------- 底部波浪（接收访问需求） ---------- */
+.boot-waves{
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:clamp(108px, 14.5vh, 164px);
+  width:min(760px, 74vw);
+  height:46px;
+  z-index:9;
+  display:none;
+  opacity:0;
+  pointer-events:none;
+  overflow:hidden;
+  color:rgba(152,206,242,.5);
+}
+.boot-waves .trek{
+  display:flex;
+  width:200%;
+  height:100%;
+  animation:bootTrekWave 9s linear infinite;
+}
+.boot-waves svg{ width:50%; height:100%; display:block; }
+.boot-waves path{ fill:none; stroke:currentColor; stroke-width:1.2; }
+.boot-waves path.ghost{ opacity:.28; }
+@keyframes bootTrekWave{
+  from{ transform:translateX(0); }
+  to  { transform:translateX(-50%); }
+}
+
+/* ---------- 底部状态 / 进度 / 红色标记 ---------- */
+.boot-foot{
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:clamp(64px, 8.4vh, 92px);
+  z-index:9;
+  width:min(760px, 76vw);
+  text-align:center;
+  opacity:0;
+  pointer-events:none;
+}
+.boot-foot .zh{
+  margin:0;
+  font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",-apple-system,sans-serif;
+  font-size:clamp(9px, .92vw, 13px);
+  letter-spacing:.2em;
+  text-indent:.2em;
+  color:rgba(226,240,250,.68);
+}
+.boot-foot .en{
+  margin:6px 0 0;
+  font-size:clamp(6.5px, .64vw, 9px);
+  letter-spacing:.34em;
+  text-indent:.34em;
+  color:rgba(180,210,232,.32);
+}
+.boot-prog{
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:clamp(30px, 4vh, 46px);
+  z-index:9;
+  width:min(760px, 58vw);
+  height:1px;
+  background:rgba(255,255,255,.13);
+  opacity:0;
+  pointer-events:none;
+}
+.boot-prog i{
+  position:absolute;
+  left:0; top:-1px; bottom:-1px;
+  width:100%;
+  transform:scaleX(0);
+  transform-origin:left center;
+  background:#fff;
+  box-shadow:0 0 12px rgba(200,235,255,.9);
+}
+.boot-prog .ticks{
+  position:absolute;
+  left:0; right:0; top:5px; height:6px;
+  background:repeating-linear-gradient(90deg, rgba(215,238,255,.34) 0 1px, transparent 1px 12px);
+  opacity:.55;
+}
+.boot-idx{
+  position:absolute;
+  left:clamp(20px, 2.4vw, 40px);
+  bottom:clamp(46px, 6.4vh, 66px);
+  z-index:9;
+  display:flex;
+  gap:4px;
+  opacity:0;
+  pointer-events:none;
+}
+.boot-idx i{
+  display:block;
+  width:9px;
+  height:22px;
+  background:#ff3b30;
+  opacity:.9;
+  box-shadow:0 0 12px rgba(255,59,48,.55);
+}
+.boot-idx i:last-child{ opacity:.45; }
+
+/* ---------- 大标题 / 副标题 / 参数 / 按钮 ---------- */
+.boot-scene.tight{ gap:0; }
+
+.boot-bigtitle{
+  margin:0;
+  font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC","Source Han Sans SC",-apple-system,sans-serif;
+  font-weight:600;
+  font-size:clamp(23px, 3.7vw, 54px);
+  line-height:1.25;
+  letter-spacing:.34em;
+  text-indent:.34em;
+  color:#fff;
+  white-space:nowrap;
+  text-shadow:0 0 40px rgba(190,225,255,.34), 0 0 96px rgba(120,180,255,.16);
+}
+.boot-bigtitle .reddot{
+  display:inline-block;
+  width:.15em; height:.15em;
+  margin-left:.16em;
+  vertical-align:.62em;
+  background:#ff3b30;
+  box-shadow:0 0 14px rgba(255,59,48,.95);
+}
+.boot-bigtitle .sep{
+  display:inline-block;
+  width:.13em; height:.13em;
+  margin:0 .42em;
+  vertical-align:.42em;
+  background:#ff3b30;
+  box-shadow:0 0 16px rgba(255,59,48,.95);
+}
+
+.boot-rule{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  width:min(620px, 74vw);
+  margin:clamp(8px, 1.4vh, 16px) auto 0;
+  font-size:clamp(6.5px, .72vw, 10px);
+  letter-spacing:.44em;
+  text-indent:.44em;
+  color:rgba(196,222,242,.52);
+  white-space:nowrap;
+}
+.boot-rule i{
+  flex:1 1 auto;
+  height:1px;
+  background:linear-gradient(90deg, transparent, rgba(160,200,230,.42));
+}
+.boot-rule i:last-child{
+  background:linear-gradient(90deg, rgba(160,200,230,.42), transparent);
+}
+
+.boot-kv{
+  width:min(330px, 62vw);
+  margin:clamp(16px, 2.8vh, 30px) auto 0;
+  display:flex;
+  flex-direction:column;
+  gap:clamp(4px, .8vh, 8px);
+  font-size:clamp(7.5px, .76vw, 11px);
+  letter-spacing:.16em;
+}
+.boot-kv-row{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:24px;
+  color:rgba(172,198,220,.48);
+}
+.boot-kv-row b{
+  font-weight:500;
+  letter-spacing:.14em;
+  color:#eef7ff;
+}
+.boot-kv-row b.hi{
+  color:#fff;
+  text-shadow:0 0 18px rgba(160,220,255,.6);
+}
+
+/* 可点击的确认按钮 */
+.boot-confirm{
+  -webkit-appearance:none;
+  appearance:none;
+  display:inline-block;
+  margin:clamp(14px, 2.4vh, 26px) auto 0;
+  padding:9px 28px;
+  border:1px solid rgba(200,228,248,.45);
+  background:rgba(160,200,230,.07);
+  font-family:inherit;
+  font-size:clamp(8px, .88vw, 12px);
+  letter-spacing:.24em;
+  color:#fff;
+  white-space:nowrap;
+  cursor:pointer;
+  transition:background .2s ease, border-color .2s ease, transform .12s ease;
+  animation:bootConfirmPulse 2.4s ease-in-out infinite;
+}
+.boot-confirm b{
+  font-weight:500;
+  letter-spacing:.18em;
+  color:#8ef3ff;
+}
+.boot-confirm:hover{
+  background:rgba(160,200,230,.16);
+  border-color:rgba(160,240,255,.95);
+}
+.boot-confirm:active{ transform:scale(.97); }
+.boot-confirm.is-done{
+  animation:none;
+  border-color:#8ef3ff;
+  background:rgba(140,240,255,.22);
+  box-shadow:0 0 34px rgba(120,220,255,.45);
+}
+@keyframes bootConfirmPulse{
+  0%, 100%{ border-color:rgba(200,228,248,.35); box-shadow:0 0 0 rgba(140,220,255,0); }
+  50%     { border-color:rgba(160,240,255,.9); box-shadow:0 0 28px rgba(120,210,255,.32); }
+}
+.boot-confirm-hint{
+  margin:10px 0 0;
+  font-size:clamp(6.5px, .64vw, 9.5px);
+  letter-spacing:.24em;
+  text-indent:.24em;
+  color:rgba(168,196,218,.38);
+}
+
+/* 细波形（身份资料确认） */
+.boot-wave{
+  width:min(640px, 74vw);
+  height:16px;
+  margin:clamp(14px, 2.4vh, 26px) auto 0;
+  color:rgba(160,200,230,.42);
+}
+.boot-wave svg{ display:block; width:100%; height:100%; }
+.boot-wave path{ animation:bootWaveFade 4.2s ease-in-out infinite; }
+@keyframes bootWaveFade{
+  0%, 100%{ opacity:.5; }
+  50%     { opacity:1; }
+}
+
+/* 中央鲸鱼徽标 */
+.boot-emblem{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:clamp(6px, 1.2vh, 12px);
+  margin:clamp(16px, 2.8vh, 30px) auto 0;
+}
+.boot-emblem-mark{
+  position:relative;
+  width:clamp(64px, 8.6vh, 96px);
+  aspect-ratio:1 / 1;
+  display:grid;
+  place-items:center;
+  color:#fff;
+}
+.boot-emblem-mark svg{
+  width:84%;
+  height:auto;
+  display:block;
+  filter:drop-shadow(0 0 16px rgba(190,230,255,.45));
+}
+.boot-emblem-mark::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border:1px solid rgba(190,225,245,.34);
+  border-right-color:transparent;
+  border-bottom-color:transparent;
+  border-radius:50%;
+  animation:bootSpin 7s linear infinite;
+}
+.boot-emblem-mark::after{
+  content:"";
+  position:absolute;
+  inset:6px;
+  border:1px solid rgba(190,225,245,.12);
+  border-radius:50%;
+}
+.boot-emblem-word{
+  font-size:clamp(7.5px, .78vw, 11px);
+  letter-spacing:.62em;
+  text-indent:.62em;
+  color:rgba(216,236,250,.66);
+  white-space:nowrap;
+}
+.boot-emblem-dash{
+  font-size:clamp(7px, .7vw, 10px);
+  letter-spacing:.34em;
+  color:rgba(150,190,220,.28);
+}
+
+/* ---------- 目标锁定雷达（读取完毕） ---------- */
+.boot-lock{
+  position:relative;
+  width:min(600px, 74vh);
+  aspect-ratio:1 / 1;
+  display:grid;
+  place-items:center;
+}
+.boot-lock svg{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  overflow:visible;
+}
+.boot-lock .c1{ fill:none; stroke:rgba(206,232,250,.5); stroke-width:1; }
+.boot-lock .c2{ fill:none; stroke:rgba(206,232,250,.30); stroke-width:1; }
+.boot-lock .c3{ fill:none; stroke:rgba(206,232,250,.16); stroke-width:1; }
+.boot-lock .ticks{
+  fill:none;
+  stroke:rgba(206,232,250,.42);
+  stroke-width:2;
+  stroke-dasharray:1.6 11;
+}
+.boot-lock .needle{
+  stroke:#ff3b30;
+  stroke-width:2.4;
+  filter:drop-shadow(0 0 10px rgba(255,59,48,.95));
+}
+.boot-lock .dot-red{ fill:#ff3b30; filter:drop-shadow(0 0 9px rgba(255,59,48,.9)); }
+.boot-lock .dot-white{ fill:#fff; }
+.boot-lock-text{ position:relative; z-index:2; text-align:center; }
+
+/* ---------- WELCOME（红色光束扫描） ---------- */
+.boot-scanwrap{
+  position:relative;
+  display:inline-block;
+  max-width:92vw;
+  padding:.05em 0;
+}
+.boot-welcome{
+  margin:0;
+  font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",-apple-system,sans-serif;
+  font-weight:600;
+  font-size:clamp(11px, 2.55vw, 38px);
+  line-height:1.3;
+  letter-spacing:.1em;
+  text-indent:.1em;
+  white-space:nowrap;
+}
+.boot-welcome.wl-red{
+  color:#ff3b30;
+  text-shadow:0 0 26px rgba(255,59,48,.55);
+}
+.boot-reveal{
+  position:absolute;
+  left:0;
+  top:0;
+  width:100%;
+  height:0;
+  overflow:hidden;
+  pointer-events:none;
+}
+.boot-welcome.wl-white{
+  position:absolute;
+  left:0;
+  top:0;
+  width:100%;
+  color:#fff;
+  text-shadow:0 0 16px rgba(190,225,255,.38);
+}
+.boot-scanbeam{
+  position:absolute;
+  left:-3%;
+  width:106%;
+  height:2px;
+  top:-10%;
+  background:linear-gradient(90deg,
+    transparent 0%,
+    rgba(255,70,55,.25) 12%,
+    #ff3b30 46%,
+    #ffb0a4 52%,
+    rgba(255,70,55,.25) 88%,
+    transparent 100%);
+  box-shadow:0 0 22px 4px rgba(255,59,48,.55);
+  opacity:0;
+  pointer-events:none;
+}.boot-welcome-sub{
+  margin:clamp(10px, 1.8vh, 18px) 0 0;
+  font-family:"PingFang SC","Microsoft YaHei",-apple-system,sans-serif;
+  font-size:clamp(8px, .9vw, 13px);
+  letter-spacing:.3em;
+  text-indent:.3em;
+  color:rgba(210,232,248,.62);
+}
+
+/* ---------- 蓝线（阶段 D） ---------- */
+.boot-rise{
+  position:absolute;
+  inset:0;
+  z-index:10;
+  display:none;
+  opacity:0;
+  pointer-events:none;
+}
+.boot-beam-wrap{
+  position:absolute;
+  left:0;
+  right:0;
+  margin-left:auto;
+  margin-right:auto;
+  top:86%;
+  width:min(1180px, 76vw);
+}
+.boot-beam{
+  position:relative;
+  height:2px;
+  background:linear-gradient(90deg,
+    transparent 0%,
+    rgba(150,205,255,.20) 6%,
+    rgba(205,236,255,.9) 30%,
+    #ffffff 52%,
+    rgba(205,236,255,.9) 72%,
+    rgba(150,205,255,.20) 94%,
+    transparent 100%);
+  box-shadow:0 0 18px rgba(130,195,255,.85), 0 0 64px rgba(80,150,255,.5);
+}
+.boot-beam::after{
+  content:"";
+  position:absolute;
+  left:57%;
+  width:15%;
+  top:-1px;
+  height:4px;
+  background:#ff3b30;
+  box-shadow:0 0 18px rgba(255,59,48,.95);
+}
+.boot-beam-ticks{
+  position:absolute;
+  left:0; right:0; top:4px;
+  height:7px;
+  background:repeating-linear-gradient(90deg, rgba(210,236,255,.5) 0 1px, transparent 1px 11px);
+  opacity:.45;
+}
+
+/* 入场元素 */
+.boot-anim{
+  opacity:0;
+  transform:translateY(12px);
+}
+
+/* 章节 2：旧 HUD 参数行让位 */
+#bootScreen.is-ch2 .boot-hud-tl .boot-meta{ display:none; }
+
+/* 终章：常驻 HUD / 边框退场 */
+#bootScreen.is-finale .boot-hud,
+#bootScreen.is-finale .boot-frame{ animation:none !important; opacity:0 !important; }
+
+/* 右上角 SKIP 可点击 */
+.boot-skip{
+  pointer-events:auto;
+  cursor:pointer;
+}
+
+/* ---------- 小屏适配 ---------- */
+@media (max-width: 1000px){
+  .boot-r2{ right:18px; width:130px; }
+  .boot-code{ right:18px; width:180px; }
+}
+@media (max-width: 900px){
+  .boot-side, .boot-check{ display:none; }
+  .boot-idx{ display:none; }
+  .boot-r2, .boot-code{ display:none !important; }
+  .boot-waves{ display:none !important; }
+  .boot-foot{ bottom:92px; width:86vw; }
+  .boot-prog{ width:78vw; bottom:60px; }
+}
+@media (max-width: 640px){
+  .boot-bigtitle{ font-size:clamp(19px, 5.2vw, 26px); letter-spacing:.18em; text-indent:.18em; }
+  .boot-rule{ letter-spacing:.22em; text-indent:.22em; gap:8px; }
+  .boot-rule span{ font-size:6.5px; }
+  .boot-kv{ width:78vw; }
+  .boot-welcome{ font-size:clamp(10px, 3.9vw, 16px); letter-spacing:.06em; text-indent:.06em; }
+  .boot-lock{ width:min(88vw, 64vh); }
+  .boot-beam-wrap{ width:88vw; }
+}
+
+
+</style>
+</head>
+<body>
+<!-- =========================================================
+     [BOOT] DEEPSEEK HARNESS OS —— 全屏多阶段启动动画（新增层）
+     说明：该层独立于原有页面结构，动画结束后自动移除，不影响任何原有逻辑
+     ========================================================= -->
+<div id="bootScreen" role="dialog" aria-modal="true" aria-label="DEEPSEEK HARNESS OS 正在启动">
+
+  <!-- 背景：网格 / 扫描线 / 光带 / 暗角 -->
+  <div class="boot-grid" aria-hidden="true"></div>
+  <div class="boot-sweep" aria-hidden="true"></div>
+  <div class="boot-scan" aria-hidden="true"></div>
+  <div class="boot-flicker" aria-hidden="true"></div>
+  <div class="boot-vignette" aria-hidden="true"></div>
+
+  <!-- 边框四角 -->
+  <div class="boot-frame" aria-hidden="true">
+    <i class="boot-corner tl"></i><i class="boot-corner tr"></i>
+    <i class="boot-corner bl"></i><i class="boot-corner br"></i>
+  </div>
+
+  <!-- HUD 左上：品牌 -->
+  <div class="boot-hud boot-hud-tl" aria-hidden="true">
+    <span class="boot-brand">
+      <i class="l1">DEEPSEEK</i>
+      <i class="l2">SYNTHESIZE INTELLIGENCE</i>
+      <i class="l3">HARNESS OS</i>
+    </span>
+    <span class="boot-meta"><span class="boot-tick"></span>REV 0.1.0 · WEB PROFILE <b>SECURE</b></span>
+    <span class="boot-meta">· IO CONFIRMED : <b>READY</b></span>
+  </div>
+
+  <!-- HUD 右上：跳过 -->
+  <div class="boot-hud boot-hud-tr" aria-hidden="true">
+    <span class="boot-skip">SKIP ▸</span>
+  </div>
+
+  <!-- HUD 左下：阶段 -->
+  <div class="boot-hud boot-hud-bl" aria-hidden="true">
+    [ <span id="bootStepNo">01</span> / 11 ] <span id="bootStepName">INITIALIZE</span>
+  </div>
+
+  <!-- HUD 右下 -->
+  <div class="boot-hud boot-hud-br" aria-hidden="true">POWERED BY DEEPSEEK</div>
+
+  <!-- 舞台 -->
+  <div class="boot-stage">
+
+    <!-- PHASE 1 · Logo -->
+    <div class="boot-scene" id="bootSceneLogo">
+      <svg class="boot-logo-mark" id="bootLogoMark" viewBox="0 0 200 130" fill="currentColor" aria-label="DEEPSEEK">
+        <path d="M20 80C20 56 44 36 74 36C104 36 128 48 142 64C146 69 152 70 158 68L160 67C166 65 172 58 176 48C177.6 44.4 181.6 45 182.4 48.8L184 56C185 60 188 62.6 192 62.4C195.4 62.2 197.4 65.4 195.6 68.2L188 80C186 83 186 86.6 188 89.6L193 97C194.8 99.8 192.6 103.2 189.4 102.6L180 101C174 100 168 103 164 108C152 122 132 130 110 130C70 130 36 112 20 80Z"/>
+        <circle cx="54" cy="62" r="4.2" fill="#000"/>
+      </svg>
+      <p class="boot-logo-word" id="bootLogoWord">深度求索</p>
+      <p class="boot-logo-sub" id="bootLogoSub">DEEPSEEK HARNESS</p>
+      <div class="boot-logo-rule" id="bootLogoRule"></div>
+    </div>
+
+    <!-- PHASE 2 · 打字机 -->
+    <div class="boot-scene" id="bootSceneType">
+      <h2 class="boot-headline"><span id="bootHeadline"></span><i class="boot-caret" aria-hidden="true"></i></h2>
+      <div class="boot-logs">
+        <div class="boot-log"><span class="k">REV</span><span class="d"></span><span class="v">0.1.0</span></div>
+        <div class="boot-log"><span class="k">PROFILE</span><span class="d"></span><span class="v">WEB · SECURE</span></div>
+        <div class="boot-log"><span class="k">MODULE</span><span class="d"></span><span class="v">6SHENHONGHONG9</span></div>
+        <div class="boot-log"><span class="k">LOADING</span><span class="d"></span><span class="ok">···</span></div>
+      </div>
+    </div>
+
+    <!-- PHASE 3 · 权限请求 -->
+    <div class="boot-scene" id="bootScenePerm">
+      <div class="boot-perm-wrap">
+        <div class="boot-perm" id="bootPermBox">
+          <p class="boot-perm-title"><span class="boot-tick"></span>需要访问许可</p>
+          <p class="boot-perm-en">ACCESS PERMISSION REQUIRED</p>
+          <div class="boot-chip">请求访问权限 <b>GRANT ACCESS</b></div>
+        </div>
+        <p class="boot-perm-note">· AWAITING OPERATOR CONSENT ·</p>
+      </div>
+    </div>
+
+    <!-- PHASE 4 · 雷达进度 -->
+    <div class="boot-scene" id="bootSceneRadar">
+      <div class="boot-radar">
+        <i class="ring r1"></i><i class="ring r2"></i><i class="ring r3"></i><i class="ring r4"></i>
+        <i class="cross-h"></i><i class="cross-v"></i>
+        <i class="spin"></i>
+        <svg class="boot-arc" viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="boot-arc-bg" cx="100" cy="100" r="88"></circle>
+          <circle class="boot-arc-fg" id="bootArc" cx="100" cy="100" r="88"></circle>
+        </svg>
+        <div class="boot-radar-core">
+          <div class="boot-pct"><span id="bootPctNum">0</span><small>%</small></div>
+          <div class="boot-radar-label">DECRYPTING WORKSPACE</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHASE 5 · 就绪 -->
+    <div class="boot-scene" id="bootSceneReady">
+      <h2 class="boot-ready-title">
+        <span class="boot-glitch" data-text="SYSTEM READY">SYSTEM READY</span>
+      </h2>
+      <p class="boot-ready-sub" id="bootReadySub">WELCOME</p>
+    </div>
+
+
+        <!-- ===================================================
+         阶段 B · 身份资料确认（交互暂停）
+         =================================================== -->
+    <div class="boot-scene tight" id="bootSceneIdentity">
+      <h2 class="boot-bigtitle"><span id="glIdentity">身份资料确认</span><span class="reddot"></span></h2>
+      <div class="boot-rule boot-anim"><i></i><span>IDENTITY VERIFICATION</span><i></i></div>
+      <div class="boot-kv boot-anim">
+        <div class="boot-kv-row"><span>身份名称</span><b class="hi">HQF</b></div>
+        <div class="boot-kv-row"><span>身份编号</span><b>OBGUR</b></div>
+        <div class="boot-kv-row"><span>授权等级</span><b>3</b></div>
+      </div>
+      <button class="boot-confirm boot-anim" id="bootConfirmBtn" type="button">确认身份 <b>CONFIRM IDENTITY</b></button>
+      <p class="boot-confirm-hint boot-anim">点击按钮，或按 Enter / Space 确认</p>
+      <div class="boot-wave boot-anim" aria-hidden="true">
+        <svg viewBox="0 0 640 16" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="1">
+          <path d="M0 8 C 20 2, 34 2, 54 8 S 88 14, 108 8 S 142 2, 162 8 S 196 14, 216 8 S 250 2, 270 8 S 304 14, 324 8 S 358 2, 378 8 S 412 14, 432 8 S 466 2, 486 8 S 520 14, 540 8 S 574 2, 594 8 S 628 14, 640 8"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ===================================================
+         阶段 C1 · 接收访问需求
+         =================================================== -->
+    <div class="boot-scene tight" id="bootSceneRequest">
+      <h2 class="boot-bigtitle boot-anim"><span id="glRequest">接收访问需求</span></h2>
+      <div class="boot-rule boot-anim"><i></i><span>ACCESS REQUEST RECEIVED</span><i></i></div>
+      <div class="boot-emblem boot-anim">
+        <div class="boot-emblem-mark">
+          <svg viewBox="0 0 200 130" fill="currentColor" aria-hidden="true">
+            <path d="M20 80C20 56 44 36 74 36C104 36 128 48 142 64C146 69 152 70 158 68L160 67C166 65 172 58 176 48C177.6 44.4 181.6 45 182.4 48.8L184 56C185 60 188 62.6 192 62.4C195.4 62.2 197.4 65.4 195.6 68.2L188 80C186 83 186 86.6 188 89.6L193 97C194.8 99.8 192.6 103.2 189.4 102.6L180 101C174 100 168 103 164 108C152 122 132 130 110 130C70 130 36 112 20 80Z"/>
+            <circle cx="54" cy="62" r="4.2" fill="#000"/>
+          </svg>
+        </div>
+        <span class="boot-emblem-word">DEEPSEEK</span>
+        <span class="boot-emblem-dash">· · · · · · · ·</span>
+      </div>
+    </div>
+
+    <!-- ===================================================
+         阶段 C2 · 开始读取权限
+         =================================================== -->
+    <div class="boot-scene tight" id="bootSceneRead">
+      <h2 class="boot-bigtitle boot-anim"><span id="glRead">开始读取权限</span></h2>
+      <div class="boot-rule boot-anim"><i></i><span>PERMISSION READ STARTED</span><i></i></div>
+      <div class="boot-emblem boot-anim">
+        <div class="boot-emblem-mark">
+          <svg viewBox="0 0 200 130" fill="currentColor" aria-hidden="true">
+            <path d="M20 80C20 56 44 36 74 36C104 36 128 48 142 64C146 69 152 70 158 68L160 67C166 65 172 58 176 48C177.6 44.4 181.6 45 182.4 48.8L184 56C185 60 188 62.6 192 62.4C195.4 62.2 197.4 65.4 195.6 68.2L188 80C186 83 186 86.6 188 89.6L193 97C194.8 99.8 192.6 103.2 189.4 102.6L180 101C174 100 168 103 164 108C152 122 132 130 110 130C70 130 36 112 20 80Z"/>
+            <circle cx="54" cy="62" r="4.2" fill="#000"/>
+          </svg>
+        </div>
+        <span class="boot-emblem-word">DEEPSEEK</span>
+        <span class="boot-emblem-dash">· · · · · · · ·</span>
+      </div>
+    </div>
+
+    <!-- ===================================================
+         阶段 C3 · 读取完毕 · 核验通过
+         =================================================== -->
+    <div class="boot-scene tight" id="bootSceneVerify">
+      <div class="boot-lock">
+        <svg viewBox="0 0 400 400" aria-hidden="true">
+          <circle class="c1" cx="200" cy="200" r="188"></circle>
+          <circle class="c2" cx="200" cy="200" r="132"></circle>
+          <circle class="c3" cx="200" cy="200" r="78"></circle>
+          <circle class="ticks" cx="200" cy="200" r="171"></circle>
+          <g class="needle-group">
+            <line class="needle" x1="200" y1="200" x2="200" y2="34"></line>
+            <animateTransform attributeName="transform" type="rotate" from="0 200 200" to="360 200 200" dur="9s" repeatCount="indefinite"></animateTransform>
+          </g>
+          <circle class="dot-red" cx="126" cy="118" r="3.6"></circle>
+          <circle class="dot-red" cx="298" cy="148" r="3"></circle>
+          <circle class="dot-red" cx="264" cy="302" r="3.6"></circle>
+          <circle class="dot-white" cx="148" cy="298" r="5"></circle>
+          <circle class="dot-white" cx="302" cy="262" r="7"></circle>
+        </svg>
+        <div class="boot-lock-text">
+          <h2 class="boot-bigtitle"><span id="glV1">读取完毕</span><span class="sep"></span><span id="glV2">核验通过</span></h2>
+          <div class="boot-rule"><i></i><span>READ COMPLETE · VERIFIED</span><i></i></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================================================
+         阶段 C4 · WELCOME（红色光束扫描）
+         =================================================== -->
+    <div class="boot-scene tight" id="bootSceneWelcome">
+      <div class="boot-scanwrap" id="bootScanWrap">
+        <h2 class="boot-welcome wl-red">WELCOME TO DEEPSEEK HARNESS</h2>
+        <span class="boot-reveal" id="bootScanReveal" aria-hidden="true">
+          <h2 class="boot-welcome wl-white">WELCOME TO DEEPSEEK HARNESS</h2>
+        </span>
+        <i class="boot-scanbeam" id="bootScanBeam" aria-hidden="true"></i>
+      </div>
+      <p class="boot-welcome-sub">欢迎 HQF 访问</p>
+      <div class="boot-emblem boot-anim">
+        <div class="boot-emblem-mark">
+          <svg viewBox="0 0 200 130" fill="currentColor" aria-hidden="true">
+            <path d="M20 80C20 56 44 36 74 36C104 36 128 48 142 64C146 69 152 70 158 68L160 67C166 65 172 58 176 48C177.6 44.4 181.6 45 182.4 48.8L184 56C185 60 188 62.6 192 62.4C195.4 62.2 197.4 65.4 195.6 68.2L188 80C186 83 186 86.6 188 89.6L193 97C194.8 99.8 192.6 103.2 189.4 102.6L180 101C174 100 168 103 164 108C152 122 132 130 110 130C70 130 36 112 20 80Z"/>
+            <circle cx="54" cy="62" r="4.2" fill="#000"/>
+          </svg>
+        </div>
+        <span class="boot-emblem-word">DEEPSEEK HARNESS</span>
+        <span class="boot-emblem-dash">· · · · · · · ·</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===================================================
+       章节 2 · 环境底 / 左侧参数 / 右侧雷达与代码流 / 底部状态
+       =================================================== -->
+  <div class="boot-ambient" id="bootAmbient" aria-hidden="true"></div>
+
+  <div class="boot-side" id="bootSide" aria-hidden="true">
+    <div class="rev-row"><span>REV</span><span class="dots">· · ·</span><span>PROFILE</span><span class="minibar"><i></i></span></div>
+    <div class="rev-line"><i></i></div>
+    <div class="kv"><span>· IO CONFIRMED :</span><b class="warn">SECURE</b></div>
+    <div class="kv"><span>· MODEL :</span><b>HARNESS-01</b></div>
+    <div class="kv"><span>· SANDBOX :</span><b>·</b></div>
+    <div class="kv"><span>· BUNDLES :</span><b>·</b></div>
+  </div>
+
+  <div class="boot-check" id="bootCheck" aria-hidden="true">
+    <div class="hd"><span>SELF-CHECK /</span><b>SECURE</b></div>
+    <div class="hdb"><i></i></div>
+    <div class="row"><span>PROFILE</span><span class="meter"><i style="width:88%"></i></span></div>
+    <div class="row"><span>BUNDLES</span><span class="meter"><i style="width:64%"></i></span></div>
+    <div class="row"><span>MODEL</span><span class="meter"><i style="width:92%"></i></span></div>
+    <div class="row warn"><span>SANDBOX</span><span class="meter"><i style="width:41%"></i></span></div>
+    <div class="row"><span>SESSIONS</span><span class="meter"><i style="width:76%"></i></span></div>
+  </div>
+
+  <!-- 接收访问需求：右侧雷达 -->
+  <div class="boot-r2" id="bootRadar2" aria-hidden="true">
+    <div class="dial">
+      <div class="sweep"></div>
+      <div class="core"><span id="bootRadarPct">0</span><small>%</small></div>
+    </div>
+    <div class="cap">SCANNING ACCESS</div>
+    <div class="bar"><i id="bootRadarBar"></i></div>
+  </div>
+
+  <!-- 开始读取权限：右侧代码流 -->
+  <div class="boot-code" id="bootCode" aria-hidden="true"></div>
+
+  <!-- 接收访问需求：底部波浪 -->
+  <div class="boot-waves" id="bootWaves" aria-hidden="true">
+    <div class="trek">
+      <svg viewBox="0 0 1200 46" preserveAspectRatio="none">
+        <path d="M0 23 q30 -16 60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0"/>
+        <path class="ghost" d="M0 23 q30 -16 60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0" transform="translate(0,9)"/>
+      </svg>
+      <svg viewBox="0 0 1200 46" preserveAspectRatio="none">
+        <path d="M0 23 q30 -16 60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0"/>
+        <path class="ghost" d="M0 23 q30 -16 60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0" transform="translate(0,9)"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="boot-idx" id="bootIdx" aria-hidden="true"><i></i><i></i></div>
+
+  <div class="boot-foot" id="bootFoot" aria-hidden="true">
+    <p class="zh" id="bootFootZh">核对身份资料…</p>
+    <p class="en" id="bootFootEn">VERIFYING OPERATOR RECORDS</p>
+  </div>
+
+  <div class="boot-prog" id="bootProg" aria-hidden="true">
+    <i id="bootProgFill"></i>
+    <div class="ticks"></div>
+  </div>
+
+  <div class="boot-rise" id="bootRise" aria-hidden="true">
+    <div class="boot-beam-wrap">
+      <div class="boot-beam"></div>
+      <div class="boot-beam-ticks"></div>
+    </div>
+  </div>
+
+<div class="boot-blackout" id="bootBlackout" aria-hidden="true"></div>
+  <div class="boot-flash" id="bootFlash" aria-hidden="true"></div>
+</div>
+<noscript><style>#bootScreen{display:none !important;}</style></noscript>
+
+
+<!-- 全局氛围粒子层：固定全屏、不拦截指针、切页时不重建 -->
+<canvas id="ambient" aria-hidden="true"></canvas>
+
+<!-- 静音开关 -->
+<button id="soundToggle" class="sound-toggle" type="button" aria-pressed="true">🔊 音效开</button>
+
+<!-- 舞台 -->
+<div id="stage">
+
+  <!-- ============ 第 1 页：西南联大精神 ============ -->
+  <section class="page active" id="page-xinan" data-index="0" aria-hidden="false">
+
+    <!-- ===== 左侧大相片位：1 大 + 4 小 ===== -->
+    <div class="side-gallery side-gallery-left" aria-label="西南联大精神左侧照片墙">
+      <!-- 大图 1：请在此处填写图片路径 -->
+      <button class="side-photo side-photo-large" type="button" data-photo-title="西南联大 · 大图 1" aria-label="查看大图 1">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <!-- 若图片路径为空或加载失败，显示这个占位相框 -->
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <!-- 小图 1 -->
+      <button class="side-photo" type="button" data-photo-title="西南联大 · 小图 1" aria-label="查看小图 1">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <!-- 小图 2 -->
+      <button class="side-photo" type="button" data-photo-title="西南联大 · 小图 2" aria-label="查看小图 2">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <!-- 小图 3 -->
+      <button class="side-photo" type="button" data-photo-title="西南联大 · 小图 3" aria-label="查看小图 3">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <!-- 小图 4 -->
+      <button class="side-photo" type="button" data-photo-title="西南联大 · 小图 4" aria-label="查看小图 4">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+    </div>
+
+    <!-- ===== 右侧大相片位：1 大 + 4 小（与左侧对称） ===== -->
+    <div class="side-gallery side-gallery-right" aria-label="西南联大精神右侧照片墙">
+      <!-- 大图 2：请在此处填写图片路径 -->
+      <button class="side-photo side-photo-large" type="button" data-photo-title="西南联大 · 大图 2" aria-label="查看大图 2">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <!-- 小图 5 -->
+      <button class="side-photo" type="button" data-photo-title="西南联大 · 小图 5" aria-label="查看小图 5">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <!-- 小图 6 -->
+      <button class="side-photo" type="button" data-photo-title="西南联大 · 小图 6" aria-label="查看小图 6">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <!-- 小图 7 -->
+      <button class="side-photo" type="button" data-photo-title="西南联大 · 小图 7" aria-label="查看小图 7">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <!-- 小图 8 -->
+      <button class="side-photo" type="button" data-photo-title="西南联大 · 小图 8" aria-label="查看小图 8">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+    </div>
+
+    <div class="page-inner">
+      <header class="page-head">
+        <span class="page-index">01</span>
+        <h1 class="page-title">西南联大精神</h1>
+      </header>
+
+      <!-- 赞颂文字 -->
+      <div class="tribute-bar">
+        山河破碎之际，华北已容不下一张平静的书桌。北大、清华、南开三校师生徒步穿越湘黔滇，用草鞋丈量三千里国土。在铁皮屋顶与茅草土墙的教室中，他们忍受着蚊虫叮咬与日机轰炸，却从未熄灭求知的圣火。他们用破旧的马扎和永不妥协的刚毅，铸就了弦歌不辍的教育奇迹，撑起了民族精神不屈的脊梁！
+      </div>
+
+      <!-- 照片墙：左右各 3 张，包裹卡片 -->
+      <div class="photo-wall">
+        <div class="photo-side" id="xinan-photos-left"></div>
+        <div class="card" id="cardXinan" tabindex="0" role="button"
+             aria-label="精神卡片，点击或悬停可翻转">
+          <div class="card-inner">
+            <div class="card-face card-front">
+              <span class="card-index">01</span>
+              <!-- 玩法F：文字粒子炸裂画布（离屏采样「刚毅坚卓」像素） -->
+              <canvas class="word-canvas no-flip" id="wordCanvas" aria-label="刚毅坚卓"></canvas>
+              <h2 class="card-name">西南联大精神</h2>
+              <div class="card-art" aria-hidden="true">
+                <!-- 简笔校舍 / 茅草屋顶 -->
+                <svg viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+                  <g fill="none" stroke="currentColor" stroke-width="1.5"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M26 74 L120 30 L214 74"/>
+                    <path d="M44 74 L120 41 L196 74"/>
+                    <path d="M58 74 L58 120 L182 120 L182 74"/>
+                    <path d="M102 120 L102 90 L138 90 L138 120"/>
+                    <path d="M70 88 L88 88 L88 104 L70 104 Z"/>
+                    <path d="M152 88 L170 88 L170 104 L152 104 Z"/>
+                    <path d="M18 128 L222 128"/>
+                    <path d="M120 30 L120 14 L136 21 L120 27"/>
+                  </g>
+                  <g fill="currentColor" opacity=".55">
+                    <circle cx="120" cy="11" r="1.6"/>
+                    <circle cx="34" cy="66" r="1.3"/>
+                    <circle cx="208" cy="66" r="1.3"/>
+                  </g>
+                </svg>
+              </div>
+            </div>
+
+            <div class="card-face card-back">
+              <div class="back-block">
+                <p class="back-label">精神内核</p>
+                <p class="back-core">刚毅坚卓<br>弦歌不辍</p>
+              </div>
+              <div class="back-divider"></div>
+              <div class="back-block">
+                <p class="back-label">关键数字</p>
+                <p class="back-num">8 年 · 3882 名毕业生</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="photo-side" id="xinan-photos-right"></div>
+      </div>
+
+      <p class="hint">点击卡片或悬停翻转 · 划过「刚毅坚卓」触发粒子炸裂 · 点击两侧照片放大</p>
+
+      <button class="act-btn" id="btnBurst" type="button">散 · 聚</button>
+
+      <div class="manifesto">
+        <span class="typed"></span><span class="caret" aria-hidden="true"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 第 2 页：两弹一星精神 ============ -->
+  <section class="page" id="page-liangdan" data-index="1" aria-hidden="true">
+
+    <!-- ===== 左侧大相片位：1 大 + 4 小 ===== -->
+    <div class="side-gallery side-gallery-left" aria-label="两弹一星精神左侧照片墙">
+      <button class="side-photo side-photo-large" type="button" data-photo-title="两弹一星 · 大图 1" aria-label="查看大图 1">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="两弹一星 · 小图 1" aria-label="查看小图 1">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="两弹一星 · 小图 2" aria-label="查看小图 2">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="两弹一星 · 小图 3" aria-label="查看小图 3">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="两弹一星 · 小图 4" aria-label="查看小图 4">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+    </div>
+
+    <!-- ===== 右侧大相片位：1 大 + 4 小 ===== -->
+    <div class="side-gallery side-gallery-right" aria-label="两弹一星精神右侧照片墙">
+      <button class="side-photo side-photo-large" type="button" data-photo-title="两弹一星 · 大图 2" aria-label="查看大图 2">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="两弹一星 · 小图 5" aria-label="查看小图 5">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="两弹一星 · 小图 6" aria-label="查看小图 6">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="两弹一星 · 小图 7" aria-label="查看小图 7">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="两弹一星 · 小图 8" aria-label="查看小图 8">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+    </div>
+
+    <!-- 玩法B①：点火粒子画布 -->
+    <canvas class="fx" id="fx-liangdan" aria-hidden="true"></canvas>
+
+    <div class="page-inner">
+      <header class="page-head">
+        <span class="page-index">02</span>
+        <h1 class="page-title">两弹一星精神</h1>
+      </header>
+
+      <div class="tribute-bar">
+        面对帝国主义的核讹诈，他们隐姓埋名，把青春和热血洒向茫茫戈壁。罗布泊的狂风呼啸，见证着老一辈科学家“干惊天动地事，做隐姓埋名人”的壮举。从一穷二白到蘑菇云腾空而起，他们用算盘和算尺打破了核垄断，用血肉之躯铸就了护国重器。他们是中华民族挺起脊梁的钢铁长城！
+      </div>
+
+      <div class="photo-wall">
+        <div class="photo-side" id="liangdan-photos-left"></div>
+        <div class="card" id="cardLiangdan" tabindex="0" role="button"
+             aria-label="精神卡片，点击或悬停可翻转">
+          <div class="card-inner">
+            <div class="card-face card-front">
+              <span class="card-index">02</span>
+              <h2 class="card-name">两弹一星精神</h2>
+              <div class="card-art" aria-hidden="true">
+                <!-- 同心圆轨道 + 星点 -->
+                <svg viewBox="0 0 240 170" preserveAspectRatio="xMidYMid meet">
+                  <g fill="none" stroke="currentColor" stroke-width="1.3">
+                    <ellipse cx="120" cy="85" rx="98" ry="34"
+                             transform="rotate(-17 120 85)" opacity=".9"/>
+                    <circle cx="120" cy="85" r="70" opacity=".5"/>
+                    <circle cx="120" cy="85" r="42" opacity=".34"/>
+                    <circle cx="120" cy="85" r="18" opacity=".24"/>
+                  </g>
+                  <circle cx="120" cy="85" r="6.5" fill="currentColor"/>
+                  <circle cx="120" cy="85" r="12" fill="none"
+                          stroke="currentColor" stroke-width="1" opacity=".7"/>
+                  <g fill="currentColor">
+                    <circle cx="199" cy="55" r="2.8"/>
+                    <circle cx="48" cy="112" r="2.2"/>
+                    <circle cx="120" cy="10" r="1.9"/>
+                    <circle cx="164" cy="141" r="1.7"/>
+                    <circle cx="66" cy="42" r="1.5"/>
+                    <circle cx="186" cy="118" r="1.4"/>
+                  </g>
+                </svg>
+              </div>
+            </div>
+
+            <div class="card-face card-back">
+              <div class="back-block">
+                <p class="back-label">精神内核</p>
+                <p class="back-core">自力更生<br>勇攀高峰</p>
+              </div>
+              <div class="back-divider"></div>
+              <div class="back-block">
+                <p class="back-label">关键数字</p>
+                <p class="back-num">1964 · 第一颗原子弹</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="photo-side" id="liangdan-photos-right"></div>
+      </div>
+
+      <p class="hint">点击卡片或悬停翻转 · 按下「点火」看粒子升空 · 点击两侧照片放大</p>
+
+      <button class="act-btn" id="btnIgnite" type="button">点 火</button>
+
+      <div class="manifesto">
+        <span class="typed"></span><span class="caret" aria-hidden="true"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 第 3 页：脱贫攻坚精神 ============ -->
+  <section class="page" id="page-tuopin" data-index="2" aria-hidden="true">
+
+    <!-- ===== 左侧大相片位：1 大 + 4 小 ===== -->
+    <div class="side-gallery side-gallery-left" aria-label="脱贫攻坚精神左侧照片墙">
+      <button class="side-photo side-photo-large" type="button" data-photo-title="脱贫攻坚 · 大图 1" aria-label="查看大图 1">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="脱贫攻坚 · 小图 1" aria-label="查看小图 1">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="脱贫攻坚 · 小图 2" aria-label="查看小图 2">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="脱贫攻坚 · 小图 3" aria-label="查看小图 3">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="脱贫攻坚 · 小图 4" aria-label="查看小图 4">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+    </div>
+
+    <!-- ===== 右侧大相片位：1 大 + 4 小 ===== -->
+    <div class="side-gallery side-gallery-right" aria-label="脱贫攻坚精神右侧照片墙">
+      <button class="side-photo side-photo-large" type="button" data-photo-title="脱贫攻坚 · 大图 2" aria-label="查看大图 2">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="脱贫攻坚 · 小图 5" aria-label="查看小图 5">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="脱贫攻坚 · 小图 6" aria-label="查看小图 6">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="脱贫攻坚 · 小图 7" aria-label="查看小图 7">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+      <button class="side-photo" type="button" data-photo-title="脱贫攻坚 · 小图 8" aria-label="查看小图 8">
+        <img src="" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="placeholder" style="display:none;">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="32" height="28" rx="2"/><circle cx="16" cy="18" r="3"/><path d="M8 30l8-6 6 5 8-8 10 9"/></svg>
+        </span>
+      </button>
+    </div>
+
+    <!-- 玩法B②：点亮山路粒子画布 -->
+    <canvas class="fx" id="fx-tuopin" aria-hidden="true"></canvas>
+
+    <div class="page-inner">
+      <header class="page-head">
+        <span class="page-index">03</span>
+        <h1 class="page-title">脱贫攻坚精神</h1>
+      </header>
+
+      <div class="tribute-bar">
+        在脱贫攻坚的战场上，无数扶贫干部以血肉之躯向贫困宣战。从毛乌素沙漠中四十年如一日“向荒沙要田粮”的治沙英雄，到带领群众在绝壁上开凿天路、牺牲六位村民生命的“愚公支书”，他们用双脚丈量贫瘠的土地，用真情温暖困难群众的心房。他们把拼搏的种子种在深山，用无私奉献书写了“不让一个贫困群众掉队”的时代丰碑！
+      </div>
+
+      <div class="photo-wall">
+        <div class="photo-side" id="tuopin-photos-left"></div>
+        <div class="card" id="cardTuopin" tabindex="0" role="button"
+             aria-label="精神卡片，点击或悬停可翻转">
+          <div class="card-inner">
+            <div class="card-face card-front">
+              <span class="card-index">03</span>
+              <h2 class="card-name">脱贫攻坚精神</h2>
+              <div class="card-art" aria-hidden="true">
+                <!-- 层叠山峦线条 -->
+                <svg viewBox="0 0 240 160" preserveAspectRatio="xMidYMid meet">
+                  <g fill="none" stroke="currentColor" stroke-width="1.5"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 118 L58 56 L96 102 L130 44 L178 108 L214 70 L234 96"/>
+                    <path d="M8 132 L70 80 L104 118 L146 72 L190 124 L234 96" opacity=".55"/>
+                    <path d="M8 144 L82 104 L122 134 L170 100 L234 120" opacity=".34"/>
+                  </g>
+                  <circle cx="198" cy="34" r="12" fill="none"
+                          stroke="currentColor" stroke-width="1.2" opacity=".8"/>
+                  <g fill="currentColor" opacity=".6">
+                    <circle cx="198" cy="34" r="3"/>
+                    <circle cx="44" cy="40" r="1.4"/>
+                    <circle cx="96" cy="26" r="1.2"/>
+                  </g>
+                </svg>
+              </div>
+            </div>
+
+            <div class="card-face card-back">
+              <div class="back-block">
+                <p class="back-label">精神内核</p>
+                <p class="back-core">上下同心<br>不负人民</p>
+              </div>
+              <div class="back-divider"></div>
+              <div class="back-block">
+                <p class="back-label">关键数字</p>
+                <p class="back-num">9899 万 · 现行标准下脱贫</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="photo-side" id="tuopin-photos-right"></div>
+      </div>
+
+      <p class="hint">点击卡片或悬停翻转 · 按下「点亮山路」沿路径升起 · 点击两侧照片放大</p>
+
+      <button class="act-btn" id="btnLight" type="button">点 亮 山 路</button>
+
+      <div class="manifesto">
+        <span class="typed"></span><span class="caret" aria-hidden="true"></span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- 左右切换 -->
+<button class="nav-btn nav-prev" id="prevBtn" type="button" aria-label="上一页">‹</button>
+<button class="nav-btn nav-next" id="nextBtn" type="button" aria-label="下一页">›</button>
+
+<!-- 分页指示 -->
+<div class="pager" id="pager" role="tablist" aria-label="页面指示">
+  <button class="dot on" type="button" data-go="0" aria-label="第 1 页"></button>
+  <button class="dot" type="button" data-go="1" aria-label="第 2 页"></button>
+  <button class="dot" type="button" data-go="2" aria-label="第 3 页"></button>
+</div>
+
+<!-- 照片放大遮罩层 -->
+<div class="photo-lightbox" id="photoLightbox" aria-hidden="true" role="dialog" aria-modal="true" aria-label="照片放大查看">
+  <div class="photo-lightbox-inner">
+    <button class="photo-lightbox-close" id="lightboxClose" type="button" aria-label="关闭">✕</button>
+    <div class="photo-lightbox-media" id="lightboxMedia"></div>
+    <p class="photo-lightbox-caption" id="lightboxCaption"></p>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =========================================================
+     0. 能力检测（全部做存在性判断，绝不因不支持而抛错白屏）
+     ========================================================= */
+
+  var CTX_OK = (function () {
+    try {
+      var c = document.createElement('canvas');
+      return !!(c.getContext && c.getContext('2d'));
+    } catch (e) {
+      return false;
+    }
+  })();
+
+  var SUPPORTS_VT = (typeof document.startViewTransition === 'function');
+
+  var reduceMQ = null;
+  var reduceMotion = false;
+  try {
+    reduceMQ = window.matchMedia('(prefers-reduced-motion: reduce)');
+    reduceMotion = reduceMQ.matches;
+  } catch (e) {
+    reduceMotion = false;
+  }
+
+  var AudioCtor = window.AudioContext || window.webkitAudioContext;
+  var audioSupported = !!AudioCtor;
+  var audioCtx = null;
+  var audioEnabled = true;
+
+  /* =========================================================
+     1. 常量与 DOM 引用
+     ========================================================= */
+
+  var MANIFESTO = [
+    '刚毅坚卓，弦歌不辍。',
+    '自力更生，勇攀高峰。',
+    '上下同心，不负人民。'
+  ];
+
+  var pageEls = Array.prototype.slice.call(document.querySelectorAll('.page'));
+  var cards = [
+    document.getElementById('cardXinan'),
+    document.getElementById('cardLiangdan'),
+    document.getElementById('cardTuopin')
+  ];
+  var dots = Array.prototype.slice.call(document.querySelectorAll('.dot'));
+
+  var currentPage = 0;
+  var typeTimer = null;
+  var cardLocked = [false, false, false];
+  var hoverTimers = [null, null, null];
+
+  /* =========================================================
+     2. Web Audio —— 落笔点击音
+     ========================================================= */
+
+  function ensureAudio() {
+    if (!audioEnabled || !audioSupported) return null;
+    try {
+      if (!audioCtx) {
+        audioCtx = new AudioCtor();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(function () {});
+      }
+      return audioCtx;
+    } catch (e) {
+      audioSupported = false;
+      return null;
+    }
+  }
+
+  function playTick() {
+    var ctx = audioCtx;
+    if (!ctx || !audioEnabled) return;
+    if (ctx.state !== 'running') return;
+    try {
+      var t = ctx.currentTime;
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(1250, t);
+      osc.frequency.exponentialRampToValueAtTime(520, t + 0.05);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.14, t + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.075);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.09);
+    } catch (e) {
+      /* 音频异常静默处理，不影响页面 */
+    }
+  }
+
+  /* =========================================================
+     3. 全局氛围粒子层（底层 Canvas，切页不重建）
+     ========================================================= */
+
+  var ambient = (function () {
+    var cv = document.getElementById('ambient');
+    if (!cv || !CTX_OK) {
+      return { resize: function () {}, degrade: function () {}, start: function () {} };
+    }
+
+    var ctx = null;
+    try {
+      ctx = cv.getContext('2d');
+    } catch (e) {
+      ctx = null;
+    }
+    if (!ctx) {
+      return { resize: function () {}, degrade: function () {}, start: function () {} };
+    }
+
+    var W = 0, H = 0, DPR = 1;
+    var parts = [];
+    var raf = null;
+    var running = false;
+    var last = 0;
+    var dead = false;
+
+    var mouse = { x: -9999, y: -9999 };
+
+    var COUNT = reduceMotion ? 0 : 1000;
+    var COLORS = [
+      'rgba(201,163,78,', 'rgba(214,176,96,', 'rgba(170,134,62,',
+      'rgba(192,57,43,', 'rgba(160,60,48,', 'rgba(120,80,60,'
+    ];
+
+    var fpsFrames = 0, fpsAcc = 0, lowStreak = 0;
+
+    function resize() {
+      DPR = Math.min(window.devicePixelRatio || 1, 2);
+      W = Math.max(1, window.innerWidth);
+      H = Math.max(1, window.innerHeight);
+      cv.width = Math.floor(W * DPR);
+      cv.height = Math.floor(H * DPR);
+      try { ctx.setTransform(DPR, 0, 0, DPR, 0, 0); } catch (e) {}
+    }
+
+    function initParticles() {
+      parts.length = 0;
+      for (var i = 0; i < COUNT; i++) {
+        var bvx = (Math.random() - 0.5) * 14;
+        var bvy = (Math.random() - 0.5) * 14;
+        parts.push({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          vx: bvx,
+          vy: bvy,
+          bvx: bvx,
+          bvy: bvy,
+          r: 0.5 + Math.random() * 1.6,
+          ci: (Math.random() * COLORS.length) | 0,
+          a: 0.18 + Math.random() * 0.45
+        });
+      }
+    }
+
+    function drawStatic() {
+      try { ctx.clearRect(0, 0, W, H); } catch (e) {}
+      if (!parts.length) return;
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        ctx.fillStyle = COLORS[p.ci] + p.a + ')';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, 6.2832);
+        ctx.fill();
+      }
+    }
+
+    function loop(now) {
+      raf = null;
+      if (!running || dead) return;
+
+      var dt = (now - last) / 1000;
+      if (!(dt > 0)) dt = 0.016;
+      if (dt > 0.05) dt = 0.05;
+      last = now;
+
+      try { ctx.clearRect(0, 0, W, H); } catch (e) { return; }
+
+      var mx = mouse.x, my = mouse.y;
+      var R = 150, R2 = R * R;
+
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        var dx = p.x - mx;
+        var dy = p.y - my;
+        var d2 = dx * dx + dy * dy;
+        if (d2 < R2 && d2 > 0.5) {
+          var d = Math.sqrt(d2);
+          var f = (1 - d / R);
+          f = f * f * 90;
+          p.vx += (dx / d) * f * dt;
+          p.vy += (dy / d) * f * dt;
+        }
+
+        p.vx += (p.bvx - p.vx) * Math.min(1, dt * 2.2);
+        p.vy += (p.bvy - p.vy) * Math.min(1, dt * 2.2);
+
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+
+        if (p.x < -24) p.x = W + 24;
+        else if (p.x > W + 24) p.x = -24;
+        if (p.y < -24) p.y = H + 24;
+        else if (p.y > H + 24) p.y = -24;
+
+        ctx.fillStyle = COLORS[p.ci] + p.a + ')';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, 6.2832);
+        ctx.fill();
+      }
+
+      fpsFrames++;
+      fpsAcc += dt;
+      if (fpsAcc >= 1) {
+        var fps = fpsFrames / fpsAcc;
+        fpsFrames = 0;
+        fpsAcc = 0;
+        if (fps < 38) {
+          lowStreak++;
+          if (lowStreak >= 2) { degrade(); return; }
+        } else {
+          lowStreak = 0;
+        }
+      }
+
+      raf = requestAnimationFrame(loop);
+    }
+
+    function start() {
+      if (dead || reduceMotion) return;
+      if (!parts.length) return;
+      running = true;
+      last = performance.now();
+      if (!raf) raf = requestAnimationFrame(loop);
+    }
+
+    function degrade() {
+      dead = true;
+      running = false;
+      if (raf) { cancelAnimationFrame(raf); raf = null; }
+      try { ctx.clearRect(0, 0, W, H); } catch (e) {}
+      cv.style.display = 'none';
+    }
+
+    resize();
+    initParticles();
+
+    if (reduceMotion) {
+      drawStatic();
+    } else {
+      start();
+    }
+
+    window.addEventListener('mousemove', function (e) {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    }, { passive: true });
+
+    window.addEventListener('mouseleave', function () {
+      mouse.x = -9999;
+      mouse.y = -9999;
+    }, { passive: true });
+
+    window.addEventListener('resize', function () {
+      if (dead) return;
+      resize();
+      initParticles();
+      if (reduceMotion) drawStatic();
+    });
+
+    return {
+      resize: function () {},
+      degrade: degrade,
+      start: start
+    };
+  })();
+
+  /* =========================================================
+     4. 玩法 F：西南联大「刚毅坚卓」文字粒子炸裂
+     ========================================================= */
+
+  var wordFx = (function () {
+    var cv = document.getElementById('wordCanvas');
+    if (!cv || !CTX_OK) return null;
+
+    var ctx = null;
+    try { ctx = cv.getContext('2d'); } catch (e) { ctx = null; }
+    if (!ctx) return null;
+
+    var TEXT = '刚毅坚卓';
+    var FONT_STACK = '"Noto Serif SC","Source Han Serif SC","STSong",serif';
+
+    var W = 0, H = 0, DPR = 1;
+    var pts = [];
+    var built = false;
+    var raf = null;
+    var running = false;
+    var lastBurst = 0;
+
+    var PALETTE = (function () {
+      var arr = [];
+      for (var i = 0; i <= 10; i++) {
+        var t = i / 10;
+        var r = Math.round(232 + (192 - 232) * t);
+        var g = Math.round(198 + (57 - 198) * t);
+        var b = Math.round(120 + (43 - 120) * t);
+        arr.push('rgb(' + r + ',' + g + ',' + b + ')');
+      }
+      return arr;
+    })();
+
+    function build() {
+      var rect;
+      try { rect = cv.getBoundingClientRect(); } catch (e) { return false; }
+
+      W = Math.max(60, Math.round(rect.width));
+      H = Math.max(40, Math.round(rect.height));
+      DPR = Math.min(window.devicePixelRatio || 1, 2);
+      cv.width = Math.round(W * DPR);
+      cv.height = Math.round(H * DPR);
+      try { ctx.setTransform(DPR, 0, 0, DPR, 0, 0); } catch (e) {}
+
+      var off = document.createElement('canvas');
+      off.width = W;
+      off.height = H;
+      var oc = null;
+      try { oc = off.getContext('2d'); } catch (e) { oc = null; }
+      if (!oc) return false;
+
+      oc.fillStyle = '#000';
+      oc.fillRect(0, 0, W, H);
+      oc.textAlign = 'center';
+      oc.textBaseline = 'middle';
+
+      var fs = Math.floor(H * 0.8);
+      oc.font = '700 ' + fs + 'px ' + FONT_STACK;
+      var mw = 0;
+      try { mw = oc.measureText(TEXT).width; } catch (e) { mw = 0; }
+      if (mw > W * 0.95 && mw > 0) {
+        fs = Math.max(10, Math.floor(fs * (W * 0.95) / mw));
+        oc.font = '700 ' + fs + 'px ' + FONT_STACK;
+      }
+
+      oc.fillStyle = '#fff';
+      oc.fillText(TEXT, W / 2, H / 2);
+
+      var data;
+      try {
+        data = oc.getImageData(0, 0, W, H).data;
+      } catch (e) {
+        return false;
+      }
+
+      pts.length = 0;
+      var step = W > 260 ? 3 : 2;
+      var maxPts = 900;
+
+      for (var y = 0; y < H && pts.length < maxPts; y += step) {
+        for (var x = 0; x < W && pts.length < maxPts; x += step) {
+          var alpha = data[(y * W + x) * 4 + 3];
+          if (alpha > 128) {
+            var ci = Math.min(10, Math.max(0, Math.round((x / W) * 10)));
+            pts.push({
+              tx: x,
+              ty: y,
+              x: x + (Math.random() - 0.5) * 70,
+              y: y + (Math.random() - 0.5) * 70,
+              vx: 0,
+              vy: 0,
+              ph: Math.random() * 6.2832,
+              color: PALETTE[ci]
+            });
+          }
+        }
+      }
+
+      built = pts.length > 0;
+      return built;
+    }
+
+    function burst(px, py, power) {
+      var R = 72;
+      var R2 = R * R;
+      for (var i = 0; i < pts.length; i++) {
+        var p = pts[i];
+        var dx = p.x - px;
+        var dy = p.y - py;
+        var d2 = dx * dx + dy * dy;
+        if (d2 < R2) {
+          var d = Math.sqrt(d2) || 0.001;
+          var f = (1 - d / R) * power;
+          p.vx += (dx / d) * f * 15 + (Math.random() - 0.5) * 2.4;
+          p.vy += (dy / d) * f * 15 + (Math.random() - 0.5) * 2.4;
+        }
+      }
+    }
+
+    function loop(now) {
+      raf = null;
+      if (!running) return;
+      if (!built) return;
+
+      try { ctx.clearRect(0, 0, W, H); } catch (e) { return; }
+
+      var wobX = Math.sin(now * 0.0016);
+      var wobY = Math.cos(now * 0.0019);
+
+      for (var i = 0; i < pts.length; i++) {
+        var p = pts[i];
+
+        p.vx += (p.tx - p.x) * 0.085;
+        p.vy += (p.ty - p.y) * 0.085;
+        p.vx *= 0.885;
+        p.vy *= 0.885;
+        p.x += p.vx;
+        p.y += p.vy;
+
+        var ox = wobX * Math.sin(p.ph) * 1.1;
+        var oy = wobY * Math.cos(p.ph) * 1.1;
+
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x + ox - 1, p.y + oy - 1, 2, 2);
+      }
+
+      raf = requestAnimationFrame(loop);
+    }
+
+    function start() {
+      if (!built) {
+        if (!build()) return;
+      }
+      if (reduceMotion) {
+        try { ctx.clearRect(0, 0, W, H); } catch (e) { return; }
+        for (var i = 0; i < pts.length; i++) {
+          ctx.fillStyle = pts[i].color;
+          ctx.fillRect(pts[i].tx - 1, pts[i].ty - 1, 2, 2);
+        }
+        return;
+      }
+      running = true;
+      if (!raf) raf = requestAnimationFrame(loop);
+    }
+
+    function stop() {
+      running = false;
+      if (raf) { cancelAnimationFrame(raf); raf = null; }
+    }
+
+    function rebuild() {
+      stop();
+      built = false;
+      pts.length = 0;
+      if (pageEls[currentPage] === document.getElementById('page-xinan')) {
+        start();
+      }
+    }
+
+    cv.addEventListener('pointermove', function (e) {
+      if (!running) return;
+      var t = performance.now();
+      if (t - lastBurst < 55) return;
+      lastBurst = t;
+      var r = cv.getBoundingClientRect();
+      burst(e.clientX - r.left, e.clientY - r.top, 0.55);
+    }, { passive: true });
+
+    cv.addEventListener('pointerdown', function (e) {
+      e.stopPropagation();
+      var r = cv.getBoundingClientRect();
+      burst(e.clientX - r.left, e.clientY - r.top, 1.4);
+    }, { passive: true });
+
+    window.addEventListener('resize', function () {
+      clearTimeout(rebuild._t);
+      rebuild._t = setTimeout(rebuild, 220);
+    });
+
+    return {
+      start: start,
+      stop: stop,
+      burstCenter: function () {
+        if (!built && !build()) return;
+        burst(W / 2, H / 2, 1.5);
+      }
+    };
+  })();
+
+  /* =========================================================
+     5. 玩法 B①：两弹一星「点火」粒子
+     ========================================================= */
+
+  var fxLiangdan = (function () {
+    var cv = document.getElementById('fx-liangdan');
+    if (!cv || !CTX_OK) return null;
+
+    var ctx = null;
+    try { ctx = cv.getContext('2d'); } catch (e) { ctx = null; }
+    if (!ctx) return null;
+
+    var MAX = 1100;
+    var pool = [];
+    var i;
+
+    for (i = 0; i < MAX; i++) {
+      pool.push({
+        on: false, x: 0, y: 0, vx: 0, vy: 0,
+        life: 0, max: 1, size: 1, col: 0
+      });
+    }
+
+    var W = 0, H = 0, DPR = 1;
+    var raf = null;
+    var running = false;
+    var last = 0;
+
+    function makeSprite(rgb) {
+      var s = document.createElement('canvas');
+      s.width = 32;
+      s.height = 32;
+      var sc = null;
+      try { sc = s.getContext('2d'); } catch (e) { sc = null; }
+      if (!sc) return null;
+      var g = sc.createRadialGradient(16, 16, 0, 16, 16, 16);
+      g.addColorStop(0, 'rgba(' + rgb + ',1)');
+      g.addColorStop(0.42, 'rgba(' + rgb + ',0.55)');
+      g.addColorStop(1, 'rgba(' + rgb + ',0)');
+      sc.fillStyle = g;
+      sc.beginPath();
+      sc.arc(16, 16, 16, 0, 6.2832);
+      sc.fill();
+      return s;
+    }
+
+    var SPRITES = [
+      makeSprite('255,222,140'),
+      makeSprite('255,162,72'),
+      makeSprite('224,92,50')
+    ];
+
+    function resize() {
+      DPR = Math.min(window.devicePixelRatio || 1, 2);
+      W = Math.max(1, window.innerWidth);
+      H = Math.max(1, window.innerHeight);
+      cv.width = Math.floor(W * DPR);
+      cv.height = Math.floor(H * DPR);
+      try { ctx.setTransform(DPR, 0, 0, DPR, 0, 0); } catch (e) {}
+    }
+
+    resize();
+    window.addEventListener('resize', function () {
+      resize();
+    });
+
+    function ignite() {
+      if (!ctx) return;
+      resize();
+
+      for (var k = 0; k < MAX; k++) pool[k].on = false;
+
+      var cx = W / 2;
+      var cy = H * 0.76;
+      var N = 560;
+
+      for (var n = 0; n < N && n < MAX; n++) {
+        var p = pool[n];
+        var spread = (Math.random() - 0.5);
+        var sp = 150 + Math.random() * 280;
+        p.on = true;
+        p.x = cx + (Math.random() - 0.5) * 30;
+        p.y = cy + (Math.random() - 0.5) * 12;
+        p.vx = spread * sp * 0.5;
+        p.vy = -sp * (0.8 + Math.random() * 0.5);
+        p.life = 0;
+        p.max = 1.9 + Math.random() * 0.9;
+        p.size = 1.2 + Math.random() * 2.6;
+        p.col = Math.random() < 0.5 ? 0 : (Math.random() < 0.6 ? 1 : 2);
+      }
+
+      running = true;
+      last = performance.now();
+      if (!raf) raf = requestAnimationFrame(loop);
+    }
+
+    function loop(now) {
+      raf = null;
+      if (!running) return;
+
+      var dt = (now - last) / 1000;
+      if (!(dt > 0)) dt = 0.016;
+      if (dt > 0.05) dt = 0.05;
+      last = now;
+
+      try { ctx.clearRect(0, 0, W, H); } catch (e) { return; }
+
+      ctx.globalCompositeOperation = 'lighter';
+
+      var cx = W / 2;
+      var capLine = H * 0.76 - H * 0.16;
+      var alive = 0;
+
+      for (var k = 0; k < MAX; k++) {
+        var p = pool[k];
+        if (!p.on) continue;
+
+        p.life += dt;
+        if (p.life > p.max) {
+          p.on = false;
+          continue;
+        }
+        alive++;
+
+        p.vx *= 0.992;
+        p.vy *= 0.992;
+        p.vy += 26 * dt;
+
+        if (p.y < capLine) {
+          var dx = p.x - cx;
+          var sgn = dx >= 0 ? 1 : -1;
+          p.vx += sgn * (60 + Math.random() * 70) * dt;
+          p.vy += 18 * dt;
+        }
+
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+
+        var k2 = p.life / p.max;
+        var alpha = k2 < 0.12 ? (k2 / 0.12) : (1 - (k2 - 0.12) / 0.88);
+        if (alpha < 0) alpha = 0;
+        if (alpha > 1) alpha = 1;
+        alpha *= 0.9;
+
+        var sp = SPRITES[p.col];
+        var sz = p.size * 7;
+
+        if (sp) {
+          ctx.globalAlpha = alpha;
+          ctx.drawImage(sp, p.x - sz / 2, p.y - sz / 2, sz, sz);
+        } else {
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = 'rgba(255,190,100,1)';
+          ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
+        }
+      }
+
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+
+      if (alive === 0) {
+        running = false;
+        try { ctx.clearRect(0, 0, W, H); } catch (e) {}
+        return;
+      }
+
+      raf = requestAnimationFrame(loop);
+    }
+
+    function start() {
+      if (!running) {
+        var alive = false;
+        for (var k = 0; k < MAX; k++) {
+          if (pool[k].on) { alive = true; break; }
+        }
+        if (!alive) return;
+        running = true;
+        last = performance.now();
+        if (!raf) raf = requestAnimationFrame(loop);
+      }
+    }
+
+    function stop() {
+      running = false;
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = null;
+      }
+    }
+
+    return { start: start, stop: stop, ignite: ignite };
+  })();
+
+  /* =========================================================
+     6. 玩法 B②：脱贫攻坚「点亮山路」粒子
+     ========================================================= */
+
+  var fxTuopin = (function () {
+    var cv = document.getElementById('fx-tuopin');
+    if (!cv || !CTX_OK) return null;
+
+    var ctx = null;
+    try { ctx = cv.getContext('2d'); } catch (e) { ctx = null; }
+    if (!ctx) return null;
+
+    var MAX = 600;
+    var pool = [];
+    var i;
+
+    for (i = 0; i < MAX; i++) {
+      pool.push({
+        on: false, t: 0, sp: 0, off: 0, ph: 0,
+        size: 1, col: 0
+      });
+    }
+
+    var W = 0, H = 0, DPR = 1;
+    var raf = null;
+    var running = false;
+    var last = 0;
+    var fade = 1;
+
+    function makeSprite(rgb) {
+      var s = document.createElement('canvas');
+      s.width = 32;
+      s.height = 32;
+      var sc = null;
+      try { sc = s.getContext('2d'); } catch (e) { sc = null; }
+      if (!sc) return null;
+      var g = sc.createRadialGradient(16, 16, 0, 16, 16, 16);
+      g.addColorStop(0, 'rgba(' + rgb + ',1)');
+      g.addColorStop(0.45, 'rgba(' + rgb + ',0.5)');
+      g.addColorStop(1, 'rgba(' + rgb + ',0)');
+      sc.fillStyle = g;
+      sc.beginPath();
+      sc.arc(16, 16, 16, 0, 6.2832);
+      sc.fill();
+      return s;
+    }
+
+    var SPRITES = [
+      makeSprite('124,226,150'),
+      makeSprite('236,206,124')
+    ];
+
+    function resize() {
+      DPR = Math.min(window.devicePixelRatio || 1, 2);
+      W = Math.max(1, window.innerWidth);
+      H = Math.max(1, window.innerHeight);
+      cv.width = Math.floor(W * DPR);
+      cv.height = Math.floor(H * DPR);
+      try { ctx.setTransform(DPR, 0, 0, DPR, 0, 0); } catch (e) {}
+    }
+
+    resize();
+    window.addEventListener('resize', function () {
+      resize();
+    });
+
+    function pathAt(t) {
+      var x0 = W * 0.06, y0 = H * 0.92;
+      var x1 = W * 0.30, y1 = H * 0.99;
+      var x2 = W * 0.60, y2 = H * 0.66;
+      var x3 = W * 0.94, y3 = H * 0.40;
+      var mt = 1 - t;
+      var a = mt * mt * mt;
+      var b = 3 * mt * mt * t;
+      var c2 = 3 * mt * t * t;
+      var d = t * t * t;
+      return {
+        x: a * x0 + b * x1 + c2 * x2 + d * x3,
+        y: a * y0 + b * y1 + c2 * y2 + d * y3
+      };
+    }
+
+    function lightUp() {
+      if (!ctx) return;
+      resize();
+
+      for (var k = 0; k < MAX; k++) pool[k].on = false;
+
+      var N = 380;
+      for (var n = 0; n < N && n < MAX; n++) {
+        var p = pool[n];
+        p.on = true;
+        p.t = -Math.random() * 0.5;
+        p.sp = 0.22 + Math.random() * 0.20;
+        p.off = (Math.random() - 0.5) * 26;
+        p.ph = Math.random() * 6.2832;
+        p.size = 1 + Math.random() * 2.2;
+        p.col = Math.random() < 0.58 ? 0 : 1;
+      }
+
+      fade = 1;
+      running = true;
+      last = performance.now();
+      if (!raf) raf = requestAnimationFrame(loop);
+    }
+
+    function loop(now) {
+      raf = null;
+      if (!running) return;
+
+      var dt = (now - last) / 1000;
+      if (!(dt > 0)) dt = 0.016;
+      if (dt > 0.05) dt = 0.05;
+      last = now;
+
+      try { ctx.clearRect(0, 0, W, H); } catch (e) { return; }
+
+      ctx.globalCompositeOperation = 'lighter';
+
+      var allDone = true;
+      var wob = now * 0.0032;
+
+      for (var k = 0; k < MAX; k++) {
+        var p = pool[k];
+        if (!p.on) continue;
+
+        if (p.t < 1) {
+          p.t += p.sp * dt;
+          if (p.t > 1) p.t = 1;
+        }
+        if (p.t < 1) allDone = false;
+
+        if (p.t < 0) continue;
+
+        var pos = pathAt(p.t);
+        var offs = p.off * Math.sin(p.ph + wob);
+        var px = pos.x + offs * 0.35;
+        var py = pos.y + offs;
+
+        var alpha = Math.min(1, p.t * 6);
+        alpha *= fade;
+        if (alpha <= 0.01) continue;
+
+        var sp = SPRITES[p.col];
+        var sz = p.size * 6;
+
+        if (sp) {
+          ctx.globalAlpha = alpha;
+          ctx.drawImage(sp, px - sz / 2, py - sz / 2, sz, sz);
+        } else {
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = 'rgba(150,230,170,1)';
+          ctx.fillRect(px - 1, py - 1, 2, 2);
+        }
+      }
+
+      if (allDone) {
+        if (fade > 0) fade -= dt / 1.4;
+
+        ctx.globalAlpha = Math.max(0, fade) * 0.75;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = 'rgba(201,163,78,1)';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        for (var s = 0; s <= 1.0001; s += 0.02) {
+          var pt = pathAt(s);
+          if (s === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.stroke();
+
+        if (fade <= 0) {
+          running = false;
+          ctx.globalAlpha = 1;
+          try { ctx.clearRect(0, 0, W, H); } catch (e) {}
+          return;
+        }
+      }
+
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+
+      raf = requestAnimationFrame(loop);
+    }
+
+    function start() {
+      if (!running) {
+        var alive = false;
+        for (var k = 0; k < MAX; k++) {
+          if (pool[k].on) { alive = true; break; }
+        }
+        if (!alive) return;
+        running = true;
+        last = performance.now();
+        if (!raf) raf = requestAnimationFrame(loop);
+      }
+    }
+
+    function stop() {
+      running = false;
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = null;
+      }
+    }
+
+    return { start: start, stop: stop, lightUp: lightUp };
+  })();
+
+  /* =========================================================
+     7. 打字机宣言
+     ========================================================= */
+
+  function startTypewriter(index) {
+    if (typeTimer) {
+      clearInterval(typeTimer);
+      typeTimer = null;
+    }
+
+    var pageEl = pageEls[index];
+    if (!pageEl) return;
+    var el = pageEl.querySelector('.typed');
+    if (!el) return;
+
+    var text = MANIFESTO[index];
+    el.textContent = '';
+
+    if (reduceMotion) {
+      el.textContent = text;
+      return;
+    }
+
+    playTick();
+
+    var k = 0;
+    typeTimer = setInterval(function () {
+      k++;
+      el.textContent = text.substring(0, k);
+      if (k >= text.length) {
+        clearInterval(typeTimer);
+        typeTimer = null;
+      }
+    }, 120);
+  }
+
+  /* =========================================================
+     8. 页面切换
+     ========================================================= */
+
+  var FX_LIST = [wordFx, fxLiangdan, fxTuopin];
+
+  function setActiveFx(index) {
+    for (var k = 0; k < FX_LIST.length; k++) {
+      var fx = FX_LIST[k];
+      if (!fx) continue;
+      try {
+        if (k === index) fx.start();
+        else fx.stop();
+      } catch (e) {}
+    }
+  }
+
+  function setPage(index) {
+    currentPage = index;
+
+    for (var k = 0; k < pageEls.length; k++) {
+      var on = (k === index);
+      pageEls[k].classList.toggle('active', on);
+      pageEls[k].setAttribute('aria-hidden', on ? 'false' : 'true');
+    }
+
+    for (var c = 0; c < cards.length; c++) {
+      if (!cards[c]) continue;
+      cards[c].classList.remove('is-flipped');
+      cardLocked[c] = false;
+      if (hoverTimers[c]) {
+        clearTimeout(hoverTimers[c]);
+        hoverTimers[c] = null;
+      }
+    }
+
+    for (var d = 0; d < dots.length; d++) {
+      dots[d].classList.toggle('on', d === index);
+    }
+
+    setActiveFx(index);
+    startTypewriter(index);
+  }
+
+  function goTo(index) {
+    var target = ((index % 3) + 3) % 3;
+    if (target === currentPage) return;
+
+    ensureAudio();
+
+    if (SUPPORTS_VT && !reduceMotion) {
+      try {
+        var vt = document.startViewTransition(function () {
+          setPage(target);
+        });
+        if (vt && vt.finished && typeof vt.finished.catch === 'function') {
+          vt.finished.catch(function () {});
+        }
+        return;
+      } catch (e) {}
+    }
+
+    setPage(target);
+  }
+
+  /* =========================================================
+     9. 3D 卡片交互
+     ========================================================= */
+
+  var HOVER_DELAY = 1400;
+
+  function bindCard(card, index) {
+    if (!card) return;
+
+    card.addEventListener('pointerenter', function (e) {
+      if (e.pointerType === 'touch') return;
+      if (cardLocked[index]) return;
+      if (hoverTimers[index]) clearTimeout(hoverTimers[index]);
+      hoverTimers[index] = setTimeout(function () {
+        hoverTimers[index] = null;
+        if (!cardLocked[index]) card.classList.add('is-flipped');
+      }, HOVER_DELAY);
+    });
+
+    card.addEventListener('pointerleave', function (e) {
+      if (e.pointerType === 'touch') return;
+      if (hoverTimers[index]) {
+        clearTimeout(hoverTimers[index]);
+        hoverTimers[index] = null;
+      }
+      if (!cardLocked[index]) card.classList.remove('is-flipped');
+    });
+
+    card.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t && t.closest && t.closest('.no-flip')) return;
+
+      if (hoverTimers[index]) {
+        clearTimeout(hoverTimers[index]);
+        hoverTimers[index] = null;
+      }
+
+      if (card.classList.contains('is-flipped')) {
+        cardLocked[index] = true;
+      } else {
+        cardLocked[index] = true;
+        card.classList.add('is-flipped');
+      }
+
+      ensureAudio();
+    });
+
+    card.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        card.classList.toggle('is-flipped');
+        cardLocked[index] = true;
+        ensureAudio();
+      }
+    });
+  }
+
+  bindCard(cards[0], 0);
+  bindCard(cards[1], 1);
+  bindCard(cards[2], 2);
+
+  /* =========================================================
+     10. 事件绑定
+     ========================================================= */
+
+  var prevBtn = document.getElementById('prevBtn');
+  var nextBtn = document.getElementById('nextBtn');
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', function () {
+      goTo(currentPage - 1);
+    });
+  }
+
+  if (nextBtn) {
+    nextBtn.addEventListener('click', function () {
+      goTo(currentPage + 1);
+    });
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      goTo(currentPage - 1);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      goTo(currentPage + 1);
+    }
+  });
+
+  for (var di = 0; di < dots.length; di++) {
+    (function (idx) {
+      dots[idx].addEventListener('click', function () {
+        goTo(idx);
+      });
+    })(di);
+  }
+
+  document.addEventListener('pointerdown', function () {
+    ensureAudio();
+  }, true);
+
+  document.addEventListener('keydown', function () {
+    ensureAudio();
+  }, true);
+
+  var btnIgnite = document.getElementById('btnIgnite');
+  if (btnIgnite) {
+    btnIgnite.addEventListener('click', function () {
+      ensureAudio();
+      if (fxLiangdan) fxLiangdan.ignite();
+    });
+  }
+
+  var btnLight = document.getElementById('btnLight');
+  if (btnLight) {
+    btnLight.addEventListener('click', function () {
+      ensureAudio();
+      if (fxTuopin) fxTuopin.lightUp();
+    });
+  }
+
+  var btnBurst = document.getElementById('btnBurst');
+  if (btnBurst) {
+    btnBurst.addEventListener('click', function () {
+      ensureAudio();
+      if (wordFx) wordFx.burstCenter();
+    });
+  }
+
+  var soundToggle = document.getElementById('soundToggle');
+  if (soundToggle) {
+    soundToggle.addEventListener('click', function () {
+      audioEnabled = !audioEnabled;
+      if (audioEnabled) {
+        ensureAudio();
+        soundToggle.textContent = '🔊 音效开';
+        soundToggle.setAttribute('aria-pressed', 'true');
+      } else {
+        soundToggle.textContent = '🔇 静音';
+        soundToggle.setAttribute('aria-pressed', 'false');
+      }
+    });
+  }
+
+  if (reduceMQ) {
+    var onReduceChange = function (e) {
+      reduceMotion = e.matches;
+      if (reduceMotion) {
+        if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
+        var el = pageEls[currentPage].querySelector('.typed');
+        if (el) el.textContent = MANIFESTO[currentPage];
+      } else {
+        startTypewriter(currentPage);
+      }
+    };
+    if (typeof reduceMQ.addEventListener === 'function') {
+      reduceMQ.addEventListener('change', onReduceChange);
+    } else if (typeof reduceMQ.addListener === 'function') {
+      reduceMQ.addListener(onReduceChange);
+    }
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      if (fxLiangdan) fxLiangdan.stop();
+      if (fxTuopin) fxTuopin.stop();
+      if (wordFx) wordFx.stop();
+    } else {
+      setActiveFx(currentPage);
+    }
+  });
+
+  /* =========================================================
+     11. 照片墙：动态注入 + 点击放大
+     ========================================================= */
+
+  // 统一的数据：每页 6 张照片（左 3 右 3），每个照片有 SVG 图标 + 图注
+  var photoData = {
+    xinan: {
+      left: [
+        { caption: '三校师生徒步穿越湘黔滇', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#C9A34E" stroke-width="1.6" stroke-linecap="round"><circle cx="50" cy="30" r="12"/><path d="M38 48 L50 42 L62 48 L62 72 L38 72 Z"/><path d="M40 72 L34 90 M60 72 L66 90"/><circle cx="26" cy="60" r="5"/><circle cx="74" cy="56" r="4"/></g></svg>' },
+        { caption: '铁皮屋顶下的课堂', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#C9A34E" stroke-width="1.6" stroke-linecap="round"><path d="M16 40 L50 22 L84 40"/><path d="M26 40 L26 80 L74 80 L74 40"/><rect x="40" y="56" width="20" height="24"/><path d="M16 84 L84 84"/></g></svg>' },
+        { caption: '茅草土墙的校舍', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#C9A34E" stroke-width="1.6" stroke-linecap="round"><path d="M18 44 L50 26 L82 44"/><path d="M28 44 L28 78 L72 78 L72 44"/><path d="M28 60 L72 60"/><path d="M40 78 L40 66 L60 66 L60 78"/></g></svg>' }
+      ],
+      right: [
+        { caption: '破旧马扎与求知圣火', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#C9A34E" stroke-width="1.6" stroke-linecap="round"><path d="M30 60 L70 60 L60 40 L40 40 Z"/><path d="M30 60 L30 80 M70 60 L70 80"/><path d="M40 40 L40 30 M60 40 L60 30"/><circle cx="50" cy="22" r="6"/></g></svg>' },
+        { caption: '日机轰炸下弦歌不辍', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#C9A34E" stroke-width="1.6" stroke-linecap="round"><path d="M20 70 L50 40 L80 70"/><path d="M50 40 L50 20"/><path d="M30 50 L70 50" opacity=".6"/><circle cx="70" cy="28" r="4"/><path d="M78 20 L90 14"/></g></svg>' },
+        { caption: '民族精神不屈的脊梁', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#C9A34E" stroke-width="1.6" stroke-linecap="round"><circle cx="50" cy="24" r="10"/><path d="M50 34 L50 66"/><path d="M50 42 L34 52 M50 42 L66 52"/><path d="M50 66 L38 86 M50 66 L62 86"/></g></svg>' }
+      ]
+    },
+    liangdan: {
+      left: [
+        { caption: '隐姓埋名于茫茫戈壁', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#E4A94A" stroke-width="1.6" stroke-linecap="round"><circle cx="50" cy="34" r="10"/><path d="M36 48 L64 48 L58 82 L42 82 Z"/><path d="M20 88 L80 88"/><path d="M14 70 L28 70 M72 64 L86 64"/></g></svg>' },
+        { caption: '罗布泊狂风呼啸', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#E4A94A" stroke-width="1.6" stroke-linecap="round"><path d="M10 56 L34 40 L58 52 L82 34"/><path d="M10 70 L40 54 L64 68 L90 48"/><path d="M10 84 L46 68 L70 82 L90 70" opacity=".5"/></g></svg>' },
+        { caption: '用算盘和算尺打破核垄断', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#E4A94A" stroke-width="1.6" stroke-linecap="round"><rect x="20" y="30" width="60" height="40" rx="4"/><path d="M20 42 L80 42 M20 54 L80 54 M20 66 L80 66"/><circle cx="30" cy="42" r="2"/><circle cx="50" cy="54" r="2"/><circle cx="70" cy="66" r="2"/></g></svg>' }
+      ],
+      right: [
+        { caption: '蘑菇云腾空而起', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#E4A94A" stroke-width="1.6" stroke-linecap="round"><path d="M50 80 L50 50"/><ellipse cx="50" cy="34" rx="24" ry="16"/><path d="M30 34 Q50 10 70 34" opacity=".7"/><path d="M18 84 L82 84" opacity=".5"/></g></svg>' },
+        { caption: '干惊天动地事，做隐姓埋名人', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#E4A94A" stroke-width="1.6" stroke-linecap="round"><circle cx="50" cy="30" r="10"/><path d="M36 44 L64 44 L58 76 L42 76 Z"/><path d="M50 76 L50 88"/><path d="M30 88 L70 88"/><path d="M26 38 L18 30 M74 38 L82 30"/></g></svg>' },
+        { caption: '中华民族挺起脊梁的钢铁长城', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#E4A94A" stroke-width="1.6" stroke-linecap="round"><path d="M18 70 L18 40 L36 28 L54 40 L72 28 L90 40 L90 70 Z"/><path d="M36 70 L36 50 L54 50 L54 70"/><circle cx="54" cy="14" r="3"/><path d="M54 17 L54 28"/></g></svg>' }
+      ]
+    },
+    tuopin: {
+      left: [
+        { caption: '毛乌素沙漠治沙英雄', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#C9A34E" stroke-width="1.6" stroke-linecap="round"><path d="M14 74 Q34 54 54 74 Q74 54 94 74"/><path d="M50 54 L50 34"/><path d="M42 40 L58 40" opacity=".7"/><circle cx="50" cy="26" r="6"/></g></svg>' },
+        { caption: '绝壁上开凿天路', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#C9A34E" stroke-width="1.6" stroke-linecap="round"><path d="M10 82 L30 50 L50 70 L70 40 L90 82"/><path d="M28 50 L28 30 M48 70 L48 54 M68 40 L68 24"/><circle cx="48" cy="48" r="4"/></g></svg>' },
+        { caption: '用双脚丈量贫瘠的土地', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#C9A34E" stroke-width="1.6" stroke-linecap="round"><path d="M28 76 L36 40 L52 52 L66 26 L76 64"/><circle cx="36" cy="34" r="3"/><circle cx="66" cy="20" r="3"/><circle cx="76" cy="58" r="3"/><path d="M20 84 L84 84"/></g></svg>' }
+      ],
+      right: [
+        { caption: '不让一个贫困群众掉队', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#C9A34E" stroke-width="1.6" stroke-linecap="round"><circle cx="50" cy="26" r="10"/><path d="M36 40 L64 40 L58 74 L42 74 Z"/><path d="M30 64 L18 54 M70 64 L82 54"/><path d="M30 88 L70 88"/></g></svg>' },
+        { caption: '真情温暖困难群众的心房', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#C9A34E" stroke-width="1.6" stroke-linecap="round"><path d="M50 70 C50 70 20 50 20 32 C20 20 36 16 50 32 C64 16 80 20 80 32 C80 50 50 70 50 70 Z"/><path d="M30 84 L70 84" opacity=".5"/></g></svg>' },
+        { caption: '无私奉献书写时代丰碑', svg: '<svg viewBox="0 0 100 100"><g fill="none" stroke="#C9A34E" stroke-width="1.6" stroke-linecap="round"><rect x="30" y="40" width="40" height="44" rx="4"/><path d="M40 40 L40 28 L60 28 L60 40"/><path d="M44 56 L56 56 M44 66 L56 66"/><circle cx="50" cy="18" r="4"/></g></svg>' }
+      ]
+    }
+  };
+
+  function createPhotoThumb(item) {
+    var btn = document.createElement('button');
+    btn.className = 'photo-thumb';
+    btn.type = 'button';
+    btn.setAttribute('aria-label', '查看照片：' + item.caption);
+    btn.innerHTML = item.svg;
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openLightbox(item);
+      ensureAudio();
+    });
+    return btn;
+  }
+
+  // 注入照片
+  function populatePhotoWall(pageKey) {
+    var data = photoData[pageKey];
+    if (!data) return;
+    var leftContainer = document.getElementById(pageKey + '-photos-left');
+    var rightContainer = document.getElementById(pageKey + '-photos-right');
+    if (leftContainer) {
+      leftContainer.innerHTML = '';
+      data.left.forEach(function (item) {
+        leftContainer.appendChild(createPhotoThumb(item));
+      });
+    }
+    if (rightContainer) {
+      rightContainer.innerHTML = '';
+      data.right.forEach(function (item) {
+        rightContainer.appendChild(createPhotoThumb(item));
+      });
+    }
+  }
+
+  // 放大遮罩
+  var lightbox = document.getElementById('photoLightbox');
+  var lightboxMedia = document.getElementById('lightboxMedia');
+  var lightboxCaption = document.getElementById('lightboxCaption');
+  var lightboxClose = document.getElementById('lightboxClose');
+
+  function openLightbox(item) {
+    if (!lightbox || !lightboxMedia || !lightboxCaption) return;
+    lightboxMedia.innerHTML = item.svg;
+    lightboxCaption.textContent = item.caption;
+    lightbox.classList.add('on');
+    lightbox.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeLightbox() {
+    if (!lightbox) return;
+    lightbox.classList.remove('on');
+    lightbox.setAttribute('aria-hidden', 'true');
+  }
+
+  if (lightboxClose) {
+    lightboxClose.addEventListener('click', closeLightbox);
+  }
+
+  if (lightbox) {
+    lightbox.addEventListener('click', function (e) {
+      if (e.target === lightbox) {
+        closeLightbox();
+      }
+    });
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && lightbox && lightbox.classList.contains('on')) {
+      closeLightbox();
+    }
+  });
+
+  // 初始化照片墙
+  populatePhotoWall('xinan');
+  populatePhotoWall('liangdan');
+  populatePhotoWall('tuopin');
+
+  /* =========================================================
+     12. 新增：左右侧边大相片位（点击放大）
+     说明：每页左右两侧各有一个 .side-gallery，内含 1 大 + 4 小。
+     点击后复用同一个 .photo-lightbox 遮罩进行放大。
+     ========================================================= */
+
+  function getSidePhotoContent(btn) {
+    var img = btn.querySelector('img');
+    var title = btn.getAttribute('data-photo-title') || '照片';
+    if (img && img.getAttribute('src')) {
+      return {
+        caption: title,
+        svg: '<img src="' + img.getAttribute('src').replace(/"/g, '&quot;') + '" alt="' + title.replace(/"/g, '&quot;') + '">'
+      };
+    }
+    // 如果没有填写图片路径，就用占位图放大展示
+    return {
+      caption: title + '（待填写图片路径）',
+      svg: '<svg viewBox="0 0 100 100" style="background:rgba(201,163,78,.06)"><g fill="none" stroke="#C9A34E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="18" y="24" width="64" height="52" rx="4"/><circle cx="36" cy="42" r="6"/><path d="M18 62l16-12 12 10 14-16 22 18"/></g></svg>'
+    };
+  }
+
+  function bindSidePhoto(btn) {
+    if (!btn) return;
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var content = getSidePhotoContent(btn);
+      openLightbox(content);
+      ensureAudio();
+    });
+  }
+
+  var sidePhotos = document.querySelectorAll('.side-photo');
+  for (var spi = 0; spi < sidePhotos.length; spi++) {
+    bindSidePhoto(sidePhotos[spi]);
+  }
+
+  /* =========================================================
+     13. 初始化
+     ========================================================= */
+
+  requestAnimationFrame(function () {
+    setPage(0);
+    ambient.start();
+  });
+
+  if (!CTX_OK) {
+    var allCanvas = document.querySelectorAll('canvas');
+    for (var ci = 0; ci < allCanvas.length; ci++) {
+      allCanvas[ci].style.display = 'none';
+    }
+  }
+
+})();
+</script>
+<!-- =========================================================
+     [BOOT] 动画依赖：GSAP 3（CDN 多源兜底，全部失败时自动降级跳过动画）
+     ========================================================= -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" crossorigin="anonymous"></script>
+<script>if(!window.gsap){document.write('<script src="https://unpkg.com/gsap@3.12.5/dist/gsap.min.js"><\/script>');}</script>
+<script>if(!window.gsap){document.write('<script src="https://cdn.bootcdn.net/ajax/libs/gsap/3.12.5/gsap.min.js"><\/script>');}</script>
+<script>
+
+/* =========================================================
+   [BOOT] DEEPSEEK HARNESS OS —— 五阶段启动动画时间轴
+   技术：GSAP 3 timeline 严格编排（CDN 引入，失败时自动降级）
+   说明：本段为独立 IIFE，不触碰原有页面逻辑与变量
+   ========================================================= */
+(function () {
+  'use strict';
+
+  var root = document.getElementById('bootScreen');
+  if (!root) return;
+
+  var G = window.gsap;
+  var reduceMotion = false;
+  try {
+    reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch (e) { reduceMotion = false; }
+
+  /* ---------- DOM 引用 ---------- */
+  var sceneLogo  = document.getElementById('bootSceneLogo');
+  var sceneType  = document.getElementById('bootSceneType');
+  var scenePerm  = document.getElementById('bootScenePerm');
+  var sceneRadar = document.getElementById('bootSceneRadar');
+  var sceneReady = document.getElementById('bootSceneReady');
+  var headline   = document.getElementById('bootHeadline');
+  var domLogs    = root.querySelectorAll('.boot-log');
+  var arcEl      = document.getElementById('bootArc');
+  var pctNumEl   = document.getElementById('bootPctNum');
+  var stepNoEl   = document.getElementById('bootStepNo');
+  var stepNameEl = document.getElementById('bootStepName');
+  var blackoutEl = document.getElementById('bootBlackout');
+  var flashEl    = document.getElementById('bootFlash');
+
+  var TEXT    = 'DEEPSEEK SYNTHESIZE INTELLIGENCE HARNESS OS';
+  var ARC_LEN = 2 * Math.PI * 88;
+  var NARROW  = window.innerWidth < 640;
+  var LS_END  = NARROW ? '0.18em' : '0.34em';
+  var revealed = false;
+
+  function setStep(no, name) {
+    if (stepNoEl) stepNoEl.textContent = no;
+    if (stepNameEl) stepNameEl.textContent = name;
+  }
+
+  /* ---------- 无 GSAP 时的安全降级：直接放行页面 ---------- */
+  function bailOut() {
+    if (revealed) return;
+    revealed = true;
+    root.classList.add('is-off');
+    root.setAttribute('aria-hidden', 'true');
+    try { window.dispatchEvent(new CustomEvent('boot:done')); } catch (e) {}
+  }
+
+  if (!G || typeof G.timeline !== 'function') {
+    window.setTimeout(bailOut, 900);
+    return;
+  }
+
+  /* ---------- 进度环与数字 ---------- */
+  if (arcEl) {
+    arcEl.style.strokeDasharray = ARC_LEN.toFixed(2);
+    arcEl.style.strokeDashoffset = ARC_LEN.toFixed(2);
+  }
+
+  var prog = { v: 0 };
+  function paintProgress() {
+    var v = Math.max(0, Math.min(100, prog.v));
+    if (pctNumEl) pctNumEl.textContent = Math.round(v);
+    if (arcEl) arcEl.style.strokeDashoffset = (ARC_LEN * (1 - v / 100)).toFixed(2);
+  }
+
+  /* ---------- 打字机 ---------- */
+  var typed = { n: 0 };
+  function paintText() {
+    if (!headline) return;
+    headline.textContent = TEXT.slice(0, Math.max(0, Math.floor(typed.n)));
+  }
+
+  /* ---------- 故障爆发 ---------- */
+  function glitchBurst() {
+    root.classList.add('is-glitch');
+    window.setTimeout(function () {
+      root.classList.remove('is-glitch');
+    }, 360);
+  }
+
+  /* ---------- 收尾：淡出启动层，主内容向上淡入 ---------- */
+  function reveal() {
+    if (revealed) return;
+    revealed = true;
+
+    var stage = document.getElementById('stage');
+
+    function cleanup() {
+      root.classList.add('is-off');
+      root.setAttribute('aria-hidden', 'true');
+      if (stage) { G.set(stage, { clearProps: 'transform,opacity' }); }
+      try { window.dispatchEvent(new CustomEvent('boot:done')); } catch (e) {}
+    }
+
+    try {
+      if (stage) G.set(stage, { opacity: 0, y: 30 });
+
+      G.timeline({ onComplete: cleanup })
+        .to(root, { opacity: 0, duration: .85, ease: 'power2.inOut' }, 0)
+        .to(stage, { opacity: 1, y: 0, duration: 1.15, ease: 'power3.out' }, .22);
+
+      /* 兜底：万一 GSAP 队列被外部打断，1.6s 后强制移除 */
+      window.setTimeout(function () {
+        if (!root.classList.contains('is-off')) cleanup();
+      }, 2200);
+    } catch (e) {
+      root.classList.add('is-off');
+      root.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  /* =========================================================
+     主时间轴
+     ========================================================= */
+  /* =========================================================
+     [BOOT-2] 身份核验章节 —— async/await 精确时序控制器
+     说明：阶段 A–D 全部由 JS 时间轴驱动，画面 B 会暂停等待用户确认
+     ========================================================= */
+  var ambientEl   = document.getElementById('bootAmbient');
+  var sideEl      = document.getElementById('bootSide');
+  var checkEl     = document.getElementById('bootCheck');
+  var footEl      = document.getElementById('bootFoot');
+  var footZhEl    = document.getElementById('bootFootZh');
+  var footEnEl    = document.getElementById('bootFootEn');
+  var progEl      = document.getElementById('bootProg');
+  var progFillEl  = document.getElementById('bootProgFill');
+  var idxEl       = document.getElementById('bootIdx');
+  var riseEl      = document.getElementById('bootRise');
+  var radar2El    = document.getElementById('bootRadar2');
+  var radarPctEl  = document.getElementById('bootRadarPct');
+  var radarBarEl  = document.getElementById('bootRadarBar');
+  var codeEl      = document.getElementById('bootCode');
+  var wavesEl     = document.getElementById('bootWaves');
+  var scanWrapEl  = document.getElementById('bootScanWrap');
+  var confirmBtn  = document.getElementById('bootConfirmBtn');
+
+  var sceneIdentity = document.getElementById('bootSceneIdentity');
+  var sceneRequest  = document.getElementById('bootSceneRequest');
+  var sceneRead     = document.getElementById('bootSceneRead');
+  var sceneVerify   = document.getElementById('bootSceneVerify');
+  var sceneWelcome  = document.getElementById('bootSceneWelcome');
+
+  var glIdentity = document.getElementById('glIdentity');
+  var glRequest  = document.getElementById('glRequest');
+  var glRead     = document.getElementById('glRead');
+  var glV1       = document.getElementById('glV1');
+  var glV2       = document.getElementById('glV2');
+
+  var finishing = false;
+  var confirmAbort = null;
+
+  /* ---------- 底部细进度条 ---------- */
+  var load = { v: 0 };
+  function paintLoad() {
+    if (progFillEl) {
+      progFillEl.style.transform = 'scaleX(' + (load.v / 100).toFixed(4) + ')';
+    }
+  }
+  paintLoad();
+
+  /* ---------- 底部状态两行 ---------- */
+  function setStatus(zh, en) {
+    if (footZhEl) footZhEl.textContent = zh;
+    if (footEnEl) footEnEl.textContent = en;
+  }
+
+  /* ---------- 时间工具（统一响应 reduce-motion） ---------- */
+  function delay(ms) {
+    return new Promise(function (res) {
+      window.setTimeout(res, reduceMotion ? ms * 0.45 : ms);
+    });
+  }
+
+  function tw(target, vars) {
+    return new Promise(function (res) {
+      var v = {}, k, dur, done = false, guard;
+      for (k in vars) {
+        if (Object.prototype.hasOwnProperty.call(vars, k)) { v[k] = vars[k]; }
+      }
+      dur = (typeof v.duration === 'number' ? v.duration : 0.3) * 1000;
+      guard = window.setTimeout(function () { if (!done) { done = true; res(); } }, dur + 800);
+      v.onComplete = function () {
+        if (!done) { done = true; window.clearTimeout(guard); res(); }
+      };
+      G.to(target, v);
+    });
+  }
+
+  /* ---------- 乱码 → 中文（约 300ms，一次闪变） ---------- */
+  var SCRAMBLE_POOL = (function () {
+    var kana = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン';
+    var sym  = '01#%&@$*+=/\\<>{}[]';
+    return (kana + sym).split('');
+  })();
+
+  function scramble(el, text, total) {
+    if (!el) return;
+    total = total || 300;
+    var t0 = (window.performance && window.performance.now) ? performance.now() : Date.now();
+    var guard = window.setTimeout(function () { el.textContent = text; }, total + 260);
+
+    function rnd() {
+      return SCRAMBLE_POOL[Math.floor(Math.random() * SCRAMBLE_POOL.length)];
+    }
+
+    function frame(now) {
+      var p = Math.min(1, ((now || Date.now()) - t0) / total);
+      var out = '', i, ch, lockAt;
+      for (i = 0; i < text.length; i++) {
+        ch = text.charAt(i);
+        if (ch === ' ' || ch === '·') { out += ch; continue; }
+        lockAt = 0.3 + 0.7 * (i / text.length);
+        out += (p >= lockAt) ? ch : rnd();
+      }
+      el.textContent = out;
+      if (p < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        el.textContent = text;
+        window.clearTimeout(guard);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- 场景显隐 ---------- */
+  function sceneShow(el) {
+    if (!el) return Promise.resolve();
+    el.style.display = 'flex';
+    return tw(el, { opacity: 1, duration: .35, ease: 'power2.out' });
+  }
+  function sceneHide(el) {
+    if (!el) return Promise.resolve();
+    return tw(el, { opacity: 0, duration: .35, ease: 'power2.in' }).then(function () {
+      el.style.display = 'none';
+    });
+  }
+  /* 显示指定总时长（含淡入淡出） */
+  function showFor(el, totalMs) {
+    return sceneShow(el).then(function () {
+      return delay(Math.max(300, totalMs - 700));
+    }).then(function () {
+      return sceneHide(el);
+    });
+  }
+
+  /* ---------- 确认身份：等待点击 / 回车 ---------- */
+  function waitConfirm() {
+    return new Promise(function (resolve) {
+      var settled = false;
+      function finish() {
+        if (settled) { return; }
+        settled = true;
+        confirmAbort = null;
+        if (confirmBtn) { confirmBtn.removeEventListener('click', onClick); }
+        document.removeEventListener('keydown', onKey, true);
+        resolve();
+      }
+      function onClick(e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        finish();
+      }
+      function onKey(e) {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+          e.preventDefault();
+          e.stopPropagation();
+          finish();
+        }
+      }
+      if (confirmBtn) { confirmBtn.addEventListener('click', onClick); }
+      document.addEventListener('keydown', onKey, true);
+      confirmAbort = finish;
+    });
+  }
+
+  /* ---------- 右侧雷达（接收访问需求） ---------- */
+  function runRadar(ms) {
+    if (!radar2El) { return; }
+    radar2El.style.display = 'flex';
+    G.to(radar2El, { opacity: 1, duration: .4 });
+    var t0 = (window.performance && window.performance.now) ? performance.now() : Date.now();
+    function frame(now) {
+      var p = Math.min(1, ((now || Date.now()) - t0) / ms);
+      var v = Math.round(p * 100);
+      if (radarPctEl) { radarPctEl.textContent = v; }
+      if (radarBarEl) { radarBarEl.style.transform = 'scaleX(' + (v / 100).toFixed(3) + ')'; }
+      if (p < 1) { requestAnimationFrame(frame); }
+    }
+    requestAnimationFrame(frame);
+  }
+  function hideRadar() {
+    if (!radar2El) { return; }
+    G.to(radar2El, {
+      opacity: 0, duration: .3,
+      onComplete: function () { radar2El.style.display = 'none'; }
+    });
+  }
+
+  /* ---------- 右侧代码流（开始读取权限） ---------- */
+  var codeTimer = null;
+  function codeLine() {
+    var kinds = ['read', 'hash', 'index', 'load', 'sync', 'scan', 'bind', 'emit'];
+    var k   = kinds[Math.floor(Math.random() * kinds.length)];
+    var hex = ('000' + Math.floor(Math.random() * 65535).toString(16).toUpperCase()).slice(-4);
+    var seq = ('000' + Math.floor(Math.random() * 9999)).slice(-4);
+    var dots = '..............................................'.slice(0, 10 + Math.floor(Math.random() * 10));
+    var pct = 40 + Math.floor(Math.random() * 60);
+    return k + '  0x' + hex + '  ' + seq + ' ' + dots + ' ' + pct + '%';
+  }
+  function startCode() {
+    if (!codeEl || codeTimer) { return; }
+    var buf = [];
+    function push() {
+      var html = '', i;
+      buf.push(codeLine());
+      if (buf.length > 15) { buf.shift(); }
+      for (i = 0; i < buf.length; i++) { html += '<span>' + buf[i] + '</span>'; }
+      codeEl.innerHTML = html;
+    }
+    for (var n = 0; n < 15; n++) { push(); }
+    codeTimer = window.setInterval(push, 130);
+  }
+  function stopCode() {
+    if (codeTimer) {
+      window.clearInterval(codeTimer);
+      codeTimer = null;
+    }
+  }
+  window.addEventListener('boot:done', stopCode);
+
+  /* ---------- 终章 HUD 退场 ---------- */
+  function setFinale() {
+    root.classList.add('is-finale');
+  }
+
+  /* ---------- 直接进入主页（右上角 SKIP） ---------- */
+  function finishNow() {
+    if (revealed || finishing) { return; }
+    finishing = true;
+    stopCode();
+    if (confirmAbort) {
+      try { confirmAbort(); } catch (e) {}
+    }
+    var all = [sceneIdentity, sceneRequest, sceneRead, sceneVerify, sceneWelcome];
+    for (var i = 0; i < all.length; i++) {
+      if (all[i]) { all[i].style.display = 'none'; }
+    }
+    if (riseEl) { riseEl.style.display = 'none'; }
+    if (radar2El) { radar2El.style.display = 'none'; }
+    if (codeEl) { codeEl.style.display = 'none'; }
+    if (wavesEl) { wavesEl.style.display = 'none'; }
+    reveal();
+  }
+
+  /* =========================================================
+     阶段 A–D 主流程（async / await 精确控制）
+     ========================================================= */
+  /* ---------- WELCOME：红色光束自上而下扫描 ---------- */
+  var scanTl = null;
+  function runWelcomeScan() {
+    var reveal = document.getElementById('bootScanReveal');
+    var beam   = document.getElementById('bootScanBeam');
+    if (!scanWrapEl || !reveal || !beam) { return; }
+    var h = scanWrapEl.offsetHeight;
+    if (scanTl) { scanTl.kill(); }
+    G.set(reveal, { height: 0 });
+    G.set(beam, { top: '-8%', opacity: 0 });
+    scanTl = G.timeline()
+      .to(beam, { opacity: 1, duration: .1 }, 0)
+      .to(beam, { top: '104%', duration: 1.2, ease: 'power1.inOut' }, 0)
+      .to(reveal, { height: h + 'px', duration: 1.2, ease: 'power1.inOut' }, 0)
+      .to(beam, { opacity: 0, duration: .22 }, 1.02);
+  }
+  async function startSequence() {
+    if (finishing) { return; }
+
+    /* ---------- 阶段 A · 黑屏过渡 1.5s ---------- */
+    await tw(sceneReady, { opacity: 0, duration: .45, ease: 'power2.in' });
+    if (sceneReady) { sceneReady.style.display = 'none'; }
+    await tw(blackoutEl, { opacity: 1, duration: .35, ease: 'power2.in' });
+
+    root.classList.add('is-ch2');
+    G.set(ambientEl, { opacity: 1, display: 'block' });
+    G.set([sideEl, checkEl, idxEl, progEl], { opacity: 0 });
+    G.to([sideEl, checkEl, idxEl, progEl], { opacity: 1, duration: .6, stagger: .06 });
+    setStep('07', 'IDENTITY');
+    setStatus('核对身份资料…', 'VERIFYING OPERATOR RECORDS');
+    G.to(load, { v: 14, duration: .8, ease: 'none', onUpdate: paintLoad });
+    await delay(1500);
+    if (finishing) { return; }
+
+    /* ---------- 阶段 B · 身份资料确认（等待用户） ---------- */
+    G.to(blackoutEl, { opacity: 0, duration: .5, ease: 'power2.out' });
+    await sceneShow(sceneIdentity);
+    scramble(glIdentity, '身份资料确认', 300);
+    G.to('#bootSceneIdentity .boot-anim', { opacity: 1, y: 0, duration: .5, stagger: .1, ease: 'power2.out' });
+    G.to(load, { v: 24, duration: 1.4, ease: 'none', onUpdate: paintLoad });
+    await waitConfirm();
+    if (finishing) { return; }
+
+    if (confirmBtn) { confirmBtn.classList.add('is-done'); }
+    await delay(300);
+    if (finishing) { return; }
+
+    /* ---------- 阶段 C · 黑屏过渡 1.5s ---------- */
+    await tw(blackoutEl, { opacity: 1, duration: .4, ease: 'power2.in' });
+    sceneIdentity.style.display = 'none';
+    await delay(1500);
+    if (finishing) { return; }
+
+    /* ---------- 画面 6 · 接收访问需求 · 2s ---------- */
+    setStep('08', 'REQUEST');
+    setStatus('接收访问需求，建立会话通道…', 'HANDSHAKE ESTABLISHED');
+    G.to(load, { v: 46, duration: 1.6, ease: 'none', onUpdate: paintLoad });
+    G.to(blackoutEl, { opacity: 0, duration: .5, ease: 'power2.out' });
+    G.to(checkEl, { opacity: 0, duration: .3 });
+    if (wavesEl) { wavesEl.style.display = 'block'; }
+    G.to(wavesEl, { opacity: 1, duration: .45 });
+    runRadar(1700);
+    sceneShow(sceneRequest);
+    G.to('#bootSceneRequest .boot-anim', { opacity: 1, y: 0, duration: .5, stagger: .1, ease: 'power2.out' });
+    scramble(glRequest, '接收访问需求', 300);
+    await delay(1300);
+    hideRadar();
+    G.to(wavesEl, { opacity: 0, duration: .35, onComplete: function () { wavesEl.style.display = 'none'; } });
+    await sceneHide(sceneRequest);
+    if (finishing) { return; }
+
+    /* ---------- 画面 7 · 开始读取权限 · 2s ---------- */
+    setStep('09', 'READ');
+    setStatus('开始读取权限，索引工作区与会话…', 'READING PERMISSION SET');
+    G.to(load, { v: 62, duration: 1.6, ease: 'none', onUpdate: paintLoad });
+    if (codeEl) { codeEl.style.display = 'block'; }
+    startCode();
+    G.to(codeEl, { opacity: 1, duration: .4 });
+    sceneShow(sceneRead);
+    G.to('#bootSceneRead .boot-anim', { opacity: 1, y: 0, duration: .5, stagger: .1, ease: 'power2.out' });
+    scramble(glRead, '开始读取权限', 300);
+    await delay(1300);
+    G.to(codeEl, { opacity: 0, duration: .35, onComplete: function () { codeEl.style.display = 'none'; } });
+    stopCode();
+    await sceneHide(sceneRead);
+    if (finishing) { return; }
+
+    /* ---------- 画面 8 · 读取完毕 · 核验通过 · 3s ---------- */
+    setStep('10', 'VERIFY');
+    setStatus('读取完毕，核验通过，权限已授予', 'PERMISSION AUTHORIZED');
+    G.to(load, { v: 80, duration: 2, ease: 'none', onUpdate: paintLoad });
+    G.to(checkEl, { opacity: 1, duration: .4 });
+    sceneShow(sceneVerify);
+    scramble(glV1, '读取完毕', 300);
+    scramble(glV2, '核验通过', 300);
+    await showFor(sceneVerify, 3000);
+    if (finishing) { return; }
+
+    /* ---------- 画面 9 · WELCOME · 4s（红色光束扫描） ---------- */
+    setStep('11', 'WELCOME');
+    setStatus('身份验证完成，会话已建立', 'IDENTITY VERIFIED · SESSION');
+    G.to(load, { v: 96, duration: 2.4, ease: 'none', onUpdate: paintLoad });
+    sceneShow(sceneWelcome);
+    G.to('#bootSceneWelcome .boot-anim', { opacity: 1, y: 0, duration: .5, stagger: .1, ease: 'power2.out' });
+    runWelcomeScan();
+    await showFor(sceneWelcome, 4000);
+    if (finishing) { return; }
+
+    /* ---------- 阶段 D · 蓝线自底部匀速上扫 2s ---------- */
+    setFinale();
+    G.to(ambientEl, { opacity: 0, duration: 1.2, ease: 'power2.inOut' });
+    G.to(load, { v: 100, duration: .4, ease: 'none', onUpdate: paintLoad });
+    await tw([footEl, sideEl, checkEl, idxEl, progEl], { opacity: 0, duration: .4 });
+    if (riseEl) { riseEl.style.display = 'block'; }
+    await tw(riseEl, { opacity: 1, duration: .3 });
+    await tw('#bootRise .boot-beam-wrap', {
+      y: function () { return -(window.innerHeight * 1.02); },
+      duration: 2,
+      ease: 'none'
+    });
+    if (finishing) { return; }
+    reveal();
+  }
+
+  var tl = G.timeline({
+    paused: true,
+    defaults: { ease: 'power2.out' }
+  });
+
+  /* ---------- 第 1 阶段 0–2s：Logo ---------- */
+  tl.call(setStep, ['01', 'INITIALIZE'], 0.05)
+    .to(sceneLogo, { opacity: 1, duration: .9 }, .15)
+    .to('#bootLogoMark', { scale: 1, duration: 1.2, ease: 'power3.out' }, .15)
+    .to('#bootLogoWord', { opacity: 1, letterSpacing: '0.56em', textIndent: '0.56em', duration: 1.1 }, .6)
+    .to('#bootLogoRule', { scaleX: 1, duration: .9 }, .85)
+    .to('#bootLogoSub', { opacity: 1, duration: .8 }, 1.0)
+    .call(function () { root.classList.add('is-pulse'); }, null, 1.7)
+
+  /* ---------- 第 2 阶段 2–4s：闪屏 + 逐字打印 ---------- */
+    .call(setStep, ['02', 'PROTOCOL SYNC'], 2.0)
+    .call(glitchBurst, null, 2.0)
+    .to(flashEl, { opacity: .92, duration: .05, ease: 'none' }, 2.06)
+    .to(flashEl, { opacity: 0, duration: .14, ease: 'none' }, 2.12)
+    .to(blackoutEl, { opacity: 1, duration: .06, ease: 'none' }, 2.2)
+    .to(sceneLogo, { opacity: 0, duration: .16, ease: 'none' }, 2.2)
+    .to(blackoutEl, { opacity: 0, duration: .5, ease: 'power2.out' }, 2.34)
+    .to(sceneType, { opacity: 1, duration: .3 }, 2.32)
+    .to(typed, { n: TEXT.length, duration: 1.32, ease: 'none', onUpdate: paintText }, 2.44)
+    .to(domLogs, { opacity: 1, duration: .25, stagger: .18 }, 3.5)
+
+  /* ---------- 第 3 阶段 4–6s：访问权限 ---------- */
+    .call(setStep, ['03', 'ACCESS GATE'], 3.98)
+    .to(sceneType, { opacity: 0, duration: .35 }, 4.05)
+    .to(scenePerm, { opacity: 1, duration: .35 }, 4.12)
+    .to('#bootPermBox', { scale: 1, duration: .7, ease: 'back.out(1.7)' }, 4.12)
+    .to(scenePerm, { opacity: 0, duration: .3 }, 5.72)
+
+  /* ---------- 第 4 阶段 6–8s：雷达进度 ---------- */
+    .call(function () { scenePerm.style.display = 'none'; }, null, 6.04)
+    .call(setStep, ['04', 'GRANT ACCESS'], 5.78)
+    .to(sceneRadar, { opacity: 1, duration: .45 }, 6.02)
+    .call(setStep, ['05', 'DATA STREAM'], 6.2)
+    .to(prog, { v: 100, duration: 1.62, ease: 'power1.inOut', onUpdate: paintProgress }, 6.2)
+    .call(setStep, ['06', 'HANDSHAKE'], 7.55)
+    .to(sceneRadar, { opacity: 0, duration: .32 }, 7.92)
+
+  /* ---------- 第 5 阶段 8s+：SYSTEM READY —— 过渡到主页 ---------- */
+    .call(function () {
+      sceneRadar.style.display = 'none';
+      setStep('06', 'WELCOME');
+    }, null, 8.2)
+    .to(sceneReady, { opacity: 1, duration: .45 }, 8.02)
+    .to('#bootReadyTitle', {
+      letterSpacing: LS_END,
+      textIndent: LS_END,
+      duration: 1.05,
+      ease: 'power3.out'
+    }, 8.02)
+    .to('#bootReadySub', { opacity: 1, duration: .6 }, 8.3)
+
+    .call(startSequence, null, 8.62);
+
+
+  paintProgress();
+  paintText();
+  tl.play();
+
+  if (reduceMotion) tl.timeScale(3);
+
+  /* =========================================================
+     右上角 SKIP：一键跳过全部启动动画
+     ========================================================= */
+  var skipEl = root.querySelector('.boot-skip');
+  if (skipEl) {
+    skipEl.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      finishNow();
+    });
+  }
+
+})();
+
+</script>
+</body>
+</html>
